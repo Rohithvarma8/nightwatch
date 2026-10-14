@@ -46,6 +46,38 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
 - **Actionable suggestion:** Raise the limit (or allow attachments) for case-filing flows; link DevAssistant directly from the "Coming Soon" console page.
 - **Evidence:** DevAssistant conversation.
 
+### FL-003: Stateless + JSON-response Streamable HTTP app still holds GET /mcp open as an SSE stream
+
+- **Product / tool:** MCP Python SDK `mcp==2.3.0`, `MCPServer.streamable_http_app(stateless_http=True, json_response=True)`
+- **Date:** 2026-10-13
+- **Task attempted:** Serve a stateless, JSON-only MCP endpoint where GET `/mcp` returns 405 (no standalone SSE stream), as Night Watch requires for Alexa+.
+- **Steps taken:** Built the app with `stateless_http=True, json_response=True`, ran its lifespan, and sent `GET /mcp` with `Accept: text/event-stream` over an in-process ASGI client.
+- **Expected:** 405 Method Not Allowed. The spec allows a server to refuse the GET stream, and with JSON responses and no sessions there is nothing to push on it.
+- **Actual:** The request stayed open (an SSE stream) until my 2 s client timeout cancelled it. No 405.
+- **Severity:** Minor
+- **Time lost:** ~15 minutes
+- **Workaround:** A small ASGI wrapper (`RejectGetStream` in `server/src/nightwatch/app.py`) returns 405 with `Allow: POST` for GET `/mcp` before the request reaches the SDK. Covered by `test_get_mcp_is_405`.
+- **Actionable suggestion:** In stateless mode (at least combined with `json_response=True`), answer GET with 405, or add an option such as `allow_get_stream=False`.
+- **Evidence:** Probe script output: `bare SDK GET /mcp -> hung (SSE stream held open)`. Unsure whether this is intentional (stateless servers may still emit server-initiated messages); reporting the behavior as observed.
+
+---
+
+### FL-004: SDK client can't choose the protocolVersion it offers in `initialize`
+
+- **Product / tool:** MCP Python SDK `mcp==2.3.0`, `mcp.Client` / `ClientSession.initialize`
+- **Date:** 2026-10-13
+- **Task attempted:** A contract test that initializes with `protocolVersion: "2025-03-26"` (what the Alexa+ client is documented to send) using the SDK client, per our testing plan.
+- **Steps taken:** Read `Client` and `ClientSession.initialize`. `mode=` takes `"legacy"`, `"auto"`, or a *modern* version string only. `initialize()` always sends `LATEST_HANDSHAKE_VERSION` (`2025-11-25`).
+- **Expected:** A way to pin the handshake version (e.g. `Client(..., mode="legacy", protocol_version="2025-03-26")`) to test older-client compatibility.
+- **Actual:** No public parameter for it.
+- **Severity:** Minor
+- **Time lost:** ~10 minutes
+- **Workaround:** The test monkeypatches `mcp.client.session.LATEST_HANDSHAKE_VERSION`. A second test sends the raw JSON-RPC `initialize` with httpx to check the exact wire behavior.
+- **Actionable suggestion:** Expose a handshake `protocol_version` option on `Client`/`ClientSession`.
+- **Evidence:** `ClientSession.initialize` in `mcp/client/session.py` hard-codes `protocol_version=LATEST_HANDSHAKE_VERSION`.
+
+---
+
 ## Watch list (hypotheses to confirm or discard)
 - [ ] Docs say Builders support spec 2025-11-25, but the Alexa+ client `initialize` sends `protocolVersion: "2025-03-26"` (shown on the Client Lifecycle page). Record what you actually observe.
 - [ ] The "401 without `WWW-Authenticate`" requirement conflicts with the MCP auth spec / RFC 9728 guidance and with SDK/API Gateway defaults that add the header.
@@ -56,4 +88,5 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
 - [ ] The Quickstart's "MCP Apps standard" link points to the transports section of the spec, not the Apps extension.
 - [ ] Web simulator: what's visible in "response details" (tool calls? latency? raw payloads?) and what's missing for debugging.
 - [ ] Local Inspector requires Node 24+ and Playwright for visual mode.
+- [ ] SDK auto-enables DNS-rebinding protection (allowed hosts = localhost only) when `streamable_http_app(host=...)` is left at its default `127.0.0.1`. Behind API Gateway + Lambda Web Adapter, the `Host` header will be the execute-api domain. Check on Day 2 whether requests get rejected.
 - [ ] MCP Python SDK v1 → v2 API changes (FastMCP → MCPServer; transport options moved), with many tutorials still showing v1.
