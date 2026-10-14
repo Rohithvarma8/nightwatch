@@ -137,7 +137,7 @@ Every day ends with: `git push`, a friction-log pass, and 2 lines in `docs/devlo
 - [ ] Confirm Alexa+ builder access. Install the `alexa-ai` CLI, run `alexa-ai configure`, install the Add-on Agent Skill and Local Inspector (Node 24+).
 - [x] Create the public repo `nightwatch` (Apache-2.0, check the license shows in About). Add `CLAUDE.md` from this pack.
 - [x] AWS: Budget alarm ($25), Terraform `bootstrap/` (state bucket with `use_lockfile = true`).
-- [ ] `server/`: MCP SDK v2 pinned; one tool `get_active_incidents` returning a hard-coded fixture; stateless + JSON responses; `/healthz`.
+- [x] `server/`: MCP SDK v2 pinned (`mcp==2.3.0`); one tool `get_active_incidents` returning a hard-coded fixture; stateless + JSON responses; `/healthz`.
 - [ ] Local check: `make run` → MCP Inspector lists and calls the tool.
 - [ ] Start the **recorder** NOW, even as a cron on your laptop if Terraform isn't ready: NWS `alerts/active?area=CA` + AirNow every 5–15 min → S3/local JSON.
 - **Deliverable:** a local MCP server works in Inspector, and the recorder is running.

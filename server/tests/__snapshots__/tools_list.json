@@ -1,0 +1,184 @@
+[
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Active incidents"
+    },
+    "description": "Use when the user asks what's going on, whether anything is wrong, or for a status overview of the household. Covers home hazards (weather warnings, air quality, nearby fires) and production on-call alerts. Returns the most severe active incidents, each with a short spoken summary and the single most important action to take.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "default": 3,
+          "description": "Maximum incidents to return.",
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "min_severity": {
+          "default": "low",
+          "description": "Only return incidents at or above this severity.",
+          "enum": [
+            "critical",
+            "high",
+            "moderate",
+            "low"
+          ],
+          "title": "Min Severity",
+          "type": "string"
+        },
+        "scope": {
+          "default": "all",
+          "description": "home = hazards, work = production on-call, all = both.",
+          "enum": [
+            "all",
+            "home",
+            "work"
+          ],
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "title": "get_active_incidentsArguments",
+      "type": "object"
+    },
+    "name": "get_active_incidents",
+    "outputSchema": {
+      "$defs": {
+        "IncidentView": {
+          "properties": {
+            "escalation_due_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Escalation Due At"
+            },
+            "evidence_preview": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Evidence Preview",
+              "type": "array"
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "hazard",
+                "prod"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "replay": {
+              "title": "Replay",
+              "type": "boolean"
+            },
+            "replay_original_time": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Replay Original Time"
+            },
+            "severity": {
+              "enum": [
+                "critical",
+                "high",
+                "moderate",
+                "low"
+              ],
+              "title": "Severity",
+              "type": "string"
+            },
+            "spoken_summary": {
+              "title": "Spoken Summary",
+              "type": "string"
+            },
+            "started_at": {
+              "title": "Started At",
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "open",
+                "acknowledged",
+                "escalated",
+                "resolved"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            },
+            "top_action": {
+              "title": "Top Action",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "title",
+            "severity",
+            "status",
+            "started_at",
+            "spoken_summary",
+            "top_action",
+            "evidence_preview",
+            "escalation_due_at",
+            "replay",
+            "replay_original_time"
+          ],
+          "title": "IncidentView",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "as_of": {
+          "title": "As Of",
+          "type": "string"
+        },
+        "household": {
+          "title": "Household",
+          "type": "string"
+        },
+        "incidents": {
+          "items": {
+            "$ref": "#/$defs/IncidentView"
+          },
+          "title": "Incidents",
+          "type": "array"
+        },
+        "spoken_overview": {
+          "title": "Spoken Overview",
+          "type": "string"
+        }
+      },
+      "required": [
+        "as_of",
+        "household",
+        "spoken_overview"
+      ],
+      "title": "ActiveIncidents",
+      "type": "object"
+    },
+    "title": "Active incidents"
+  }
+]
