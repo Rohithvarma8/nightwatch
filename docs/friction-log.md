@@ -78,6 +78,25 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
 
 ---
 
+### FL-005: SDK DNS-rebinding protection is silently on with a localhost-only allow list, so every request behind API Gateway gets 421
+
+- **Product / tool:** MCP Python SDK `mcp==2.3.0`, `MCPServer.streamable_http_app()`
+- **Date:** 2026-10-14
+- **Task attempted:** Serve the stateless MCP app on Lambda (Lambda Web Adapter + uvicorn) behind an API Gateway HTTP API.
+- **Steps taken:** Built the app with `streamable_http_app(stateless_http=True, json_response=True)`, which leaves `host` at its default `"127.0.0.1"`. POSTed `initialize` in-process with `Host: abc123.execute-api.us-west-2.amazonaws.com`.
+- **Expected:** Either no Host validation (the app isn't binding a socket here, so `host` means nothing to it) or a clear opt-in.
+- **Actual:** `421 Misdirected Request`, body `Invalid Host header`, logged as `Invalid Host header: abc123.execute-api.us-west-2.amazonaws.com`. Because `host` defaults to `127.0.0.1`, `streamable_http_app()` auto-enables `TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"])`. Also: `Host: localhost` with no port is rejected, because the `:*` patterns require a port. The parameter is named `host` (it reads like a bind address), and nothing says it controls Host-header validation for an app you mount yourself.
+- **Severity:** Minor (caught locally before deploy; would have been Major to debug on Lambda, where it shows up as a 421 from behind API Gateway)
+- **Time lost:** ~20 minutes
+- **Workaround:** Pass `transport_security=` explicitly: the localhost defaults plus hosts from the `MCP_ALLOWED_HOSTS` env var (comma-separated), with `https://<host>` added to the allowed origins. Terraform sets the var to the execute-api domain. See `transport_security()` in `server/src/nightwatch/app.py`, covered by `tests/contract/test_allowed_hosts.py`.
+- **Actionable suggestions:**
+  1. Log once at startup when DNS-rebinding protection is auto-enabled, including the allow list.
+  2. Document in `streamable_http_app()` that `host` also selects the Host-header policy, and show the deploy-behind-a-proxy setup.
+  3. Accept a bare `localhost` (no port) in the default list.
+- **Evidence:** In-process probe: `abc123.execute-api.us-west-2.amazonaws.com 421 Invalid Host header`, `localhost 421`, `127.0.0.1:8080 200`. Source: `mcp/server/mcpserver/server.py` (`streamable_http_app`, the auto-enable block) and `mcp/server/transport_security.py`. Likely intentional secure-by-default; the issue is that it's invisible.
+
+---
+
 ## Watch list (hypotheses to confirm or discard)
 - [ ] Docs say Builders support spec 2025-11-25, but the Alexa+ client `initialize` sends `protocolVersion: "2025-03-26"` (shown on the Client Lifecycle page). Record what you actually observe.
 - [ ] The "401 without `WWW-Authenticate`" requirement conflicts with the MCP auth spec / RFC 9728 guidance and with SDK/API Gateway defaults that add the header.
@@ -86,7 +105,7 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
 - [ ] Auth metadata cached at deploy time: changing auth settings silently has no effect until redeploy.
 - [ ] Manifest needs 6 icon sizes + a 600×900 carousel image just to deploy to the dev stage.
 - [ ] The Quickstart's "MCP Apps standard" link points to the transports section of the spec, not the Apps extension.
+- [ ] Does the Alexa+ client send an `Origin` header? Any non-allowed Origin gets 403 from the SDK's DNS-rebinding check (FL-005).
 - [ ] Web simulator: what's visible in "response details" (tool calls? latency? raw payloads?) and what's missing for debugging.
 - [ ] Local Inspector requires Node 24+ and Playwright for visual mode.
-- [ ] SDK auto-enables DNS-rebinding protection (allowed hosts = localhost only) when `streamable_http_app(host=...)` is left at its default `127.0.0.1`. Behind API Gateway + Lambda Web Adapter, the `Host` header will be the execute-api domain. Check on Day 2 whether requests get rejected.
 - [ ] MCP Python SDK v1 → v2 API changes (FastMCP → MCPServer; transport options moved), with many tutorials still showing v1.

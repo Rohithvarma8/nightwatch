@@ -1,6 +1,9 @@
 """Night Watch MCP server entry point: `uvicorn nightwatch.app:asgi`."""
 
+import os
+
 from mcp.server.mcpserver import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -9,6 +12,10 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from nightwatch.tools import incidents
 
 MCP_PATH = "/mcp"
+ALLOWED_HOSTS_ENV = "MCP_ALLOWED_HOSTS"
+# The SDK's defaults when host="127.0.0.1"; kept so `make run` and the Inspector keep working.
+LOCAL_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+LOCAL_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
 
 
 class RejectGetStream:
@@ -43,10 +50,27 @@ def create_server() -> MCPServer:
     return server
 
 
+def transport_security(allowed_hosts: str) -> TransportSecuritySettings:
+    """DNS-rebinding protection: localhost plus comma-separated public hosts.
+
+    The SDK's default allows only localhost, so behind API Gateway every request would get
+    421 Invalid Host header. Terraform sets MCP_ALLOWED_HOSTS to the execute-api domain.
+    """
+    hosts = [h.strip() for h in allowed_hosts.split(",") if h.strip()]
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=LOCAL_HOSTS + hosts,
+        allowed_origins=LOCAL_ORIGINS + [f"https://{h}" for h in hosts],
+    )
+
+
 def create_app() -> tuple[Starlette, ASGIApp]:
     """Return (mcp_app, asgi). mcp_app owns the lifespan; asgi is what uvicorn serves."""
     mcp_app = create_server().streamable_http_app(
-        streamable_http_path=MCP_PATH, stateless_http=True, json_response=True
+        streamable_http_path=MCP_PATH,
+        stateless_http=True,
+        json_response=True,
+        transport_security=transport_security(os.environ.get(ALLOWED_HOSTS_ENV, "")),
     )
     return mcp_app, RejectGetStream(mcp_app)
 
