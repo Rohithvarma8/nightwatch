@@ -7,3 +7,6 @@
 ### 2026-10-15 · Day 3: real NWS alerts in DynamoDB
 - Added the single table (sparse GSI1, TTL) and the pipeline: bus `nightwatch`, NWS ingester (Scheduler every 5 min) and incident builder (bus rule, OPENKEY grouping, template summaries, 5-min expiry sweep). Demo household is Simi Valley, NWS zone CAZ374 ("Southeastern Ventura County Valleys"). After apply, the first scheduled run picked up the **real** Red Flag Warning (until 8 PM Sat) and Wind Advisory (`new: 2`), and the next run deduped both (`duplicate: 2`); `make replay` added a time-shifted archived Red Flag Warning as its own incident (`replay=true`). Live `get_active_incidents` returned all three, replay labeled.
 - MCP latency now that the tool reads DynamoDB: **warm 0.15–0.24 s** round trip (handler **9–14 ms**: GSI1 Query + cached household name). **Cold 2.07 s** (Init 1488 ms, up from ~1235 ms because of the boto3 import; first handler call 103 ms). Still on the demo-window plan (`make warm-on`). Friction log FL-007 (provider deprecation warning).
+
+### 2026-10-16 · Day 4: triage engine
+- Cold starts: we won't use provisioned concurrency (`make warm-on`). Before recording, warm the MCP function by hand with a few `tools/call` requests so the demo hits a warm container. (The account's Lambda concurrency limit is 10; that only matters if we ever turn provisioned concurrency on.)

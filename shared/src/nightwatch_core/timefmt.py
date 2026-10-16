@@ -16,16 +16,14 @@ def parse_utc(value: str) -> datetime:
 
 
 def spoken_until(ends_at: str, tz: str, now: datetime) -> str:
-    """'8 PM', '8 PM tomorrow', or '8 PM Saturday' in the household's time zone."""
+    """'8 PM Saturday' (within a week) or '8 PM October 29', in the household's time zone.
+
+    Never 'today'/'tomorrow': summaries are stored and read back later, so relative days go stale.
+    """
     zone = ZoneInfo(tz)
     end = parse_utc(ends_at).astimezone(zone)
     local_now = now.astimezone(zone)
     clock = end.strftime("%I:%M %p").lstrip("0").replace(":00", "")
-    days = (end.date() - local_now.date()).days
-    if days <= 0:
-        return clock
-    if days == 1:
-        return f"{clock} tomorrow"
-    if days < 7:
+    if (end.date() - local_now.date()).days < 7:
         return f"{clock} {end.strftime('%A')}"
     return f"{clock} {end.strftime('%B')} {end.day}"

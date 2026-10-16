@@ -15,3 +15,15 @@ variable "nws_user_agent" {
   type        = string
   sensitive   = true
 }
+
+variable "triage_model_id" {
+  description = "Primary Bedrock model for the triage agent."
+  type        = string
+  default     = "amazon.nova-lite-v1:0"
+}
+
+variable "triage_fallback_model_id" {
+  description = "Fallback Bedrock model. Claude Haiku 4.5 profile; switch to us.anthropic.claude-haiku-5-5 once this account has access."
+  type        = string
+  default     = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+}

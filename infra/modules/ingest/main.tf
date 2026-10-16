@@ -130,6 +130,23 @@ data "aws_iam_policy_document" "builder" {
   }
 
   statement {
+    sid       = "ReadSignals"
+    actions   = ["dynamodb:BatchGetItem"]
+    resources = [var.table_arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["SIG#*"]
+    }
+  }
+
+  statement {
+    sid       = "PublishIncidentChanged"
+    actions   = ["events:PutEvents"]
+    resources = [aws_cloudwatch_event_bus.this.arn]
+  }
+
+  statement {
     sid       = "QueryActive"
     actions   = ["dynamodb:Query"]
     resources = ["${var.table_arn}/index/GSI1"]

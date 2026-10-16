@@ -1,0 +1,12 @@
+title: Deploy regression
+match:
+  kinds: ["prod"]
+steps:
+  - action: Check whether the alarm started right after the latest deploy
+    why: A regression that begins within minutes of a deploy is usually caused by it.
+  - action: Roll back the latest deploy
+    why: Rolling back is the fastest way to restore service; investigate after.
+  - action: Watch the latency alarm for five minutes after the rollback
+    why: Confirms the rollback fixed it rather than masking a different issue.
+  - action: Open a ticket with the deploy ID and the alarm graph
+    why: Keeps the evidence for the follow-up fix.

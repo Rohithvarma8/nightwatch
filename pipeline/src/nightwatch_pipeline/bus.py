@@ -1,12 +1,15 @@
-"""Publish signals to the EventBridge bus."""
+"""Publish signals and IncidentChanged events to the EventBridge bus."""
 
+import json
 from collections.abc import Sequence
 
 import boto3
 
-from nightwatch_core.models import Signal
+from nightwatch_core.models import Incident, Signal
 
 DETAIL_TYPE = "Signal"
+INCIDENT_CHANGED = "IncidentChanged"
+INCIDENT_SOURCE = "nightwatch.incidents"
 LIVE_SOURCE = "nightwatch.ingest.{source}"
 REPLAY_SOURCE = "nightwatch.replay"
 _BATCH = 10  # PutEvents limit
@@ -39,3 +42,27 @@ class Bus:
                 if "ErrorCode" in entry:
                     failed.append(signal)
         return failed
+
+    def publish_incident_changed(self, incidents: Sequence[Incident]) -> None:
+        """Tell the triage agent an incident's facts changed (it re-summarizes async)."""
+        for start in range(0, len(incidents), _BATCH):
+            batch = incidents[start : start + _BATCH]
+            resp = self._client.put_events(
+                Entries=[
+                    {
+                        "EventBusName": self.bus_name,
+                        "Source": INCIDENT_SOURCE,
+                        "DetailType": INCIDENT_CHANGED,
+                        "Detail": json.dumps(
+                            {
+                                "incident_id": i.id,
+                                "household_id": i.household_id,
+                                "content_hash": i.content_hash,
+                            }
+                        ),
+                    }
+                    for i in batch
+                ]
+            )
+            if resp.get("FailedEntryCount"):
+                raise RuntimeError(f"IncidentChanged PutEvents failed: {resp['Entries']}")

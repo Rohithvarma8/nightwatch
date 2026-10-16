@@ -11,6 +11,7 @@ from nightwatch.domain.incidents import (
     MAX_LIMIT,
     IncidentSource,
     build_active_incidents,
+    overview,
     select_active,
 )
 from nightwatch.domain.models import ActiveIncidents, Scope, Severity
@@ -18,8 +19,9 @@ from nightwatch.domain.models import ActiveIncidents, Scope, Severity
 DESCRIPTION = (
     "Use when the user asks what's going on, whether anything is wrong, or for a status "
     "overview of the household. Covers home hazards (weather warnings, air quality, nearby "
-    "fires) and production on-call alerts. Returns the most severe active incidents, each with "
-    "a short spoken summary and the single most important action to take."
+    "fires) and production on-call alerts. Returns the most severe active incidents (most recent "
+    "first within a severity), each with a short spoken summary and the single most important "
+    "action to take. Replayed alerts are labeled and only shown when nothing live covers them."
 )
 
 
@@ -48,7 +50,8 @@ def register(server: MCPServer, source: IncidentSource) -> None:
         ] = 3,
     ) -> Annotated[CallToolResult, ActiveIncidents]:
         now = datetime.now(UTC)
-        selected = select_active(source.active_incidents(now), scope, min_severity, limit)
+        ranked = overview(source.active_incidents(now), now)
+        selected = select_active(ranked, scope, min_severity, limit)
         as_of = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         result = build_active_incidents(selected, source.household_name(), as_of)
         return CallToolResult(
