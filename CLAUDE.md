@@ -83,4 +83,5 @@ When anything Amazon/AWS/MCP-tooling related surprises you or the human (errors,
 - Don't rename tools casually (Alexa caches them until redeploy).
 - Don't fake data in the prod path. Demo alarms come from the real demo service.
 - Don't expand scope beyond today's PLAN.md section without asking.
-- Don't create NAT gateways, VPC-attached Lambdas, or always-on compute; budget is ~$25.
+- Don't create NAT gateways or VPC-attached Lambdas; budget is ~$25.
+- No always-on compute, except provisioned concurrency = 1 on the MCP function's live alias during demo recording (Oct 20–22) and judging (Nov 9–20). Toggle with `make warm-on` / `make warm-off`.
