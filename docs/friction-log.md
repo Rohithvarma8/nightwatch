@@ -97,6 +97,28 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
 
 ---
 
+### FL-006: MCP Python SDK import alone costs ~0.9 s of Lambda cold start; more memory doesn't help
+
+- **Product / tool:** MCP Python SDK `mcp==2.3.0` on AWS Lambda (python3.12, arm64, Lambda Web Adapter v1.1.0)
+- **Date:** 2026-10-15
+- **Task attempted:** Get the MCP server's cold start under Alexa+'s 500 ms round-trip budget without provisioned concurrency.
+- **Steps taken:**
+  1. First request after deploy: `curl -w '%{time_total}'` = 1.766 s; REPORT `Init Duration: 1235.39 ms`. The log timeline shows ~1210 ms before uvicorn's `Started server process`; app startup, the `/healthz` readiness check and the request together take ~35 ms.
+  2. Forced fresh environments on `$LATEST` (`update-function-configuration`, then `aws lambda invoke --log-type Tail`), 3 runs per memory size. Init Duration: 512 MB = 834 / 1189 / 1146 ms; 1024 MB = 1176 / 1154 / 1171 ms; 1769 MB = 1175 / 1263 / 1136 ms.
+  3. Set `PYTHONPROFILEIMPORTTIME=1` on `$LATEST`. Cumulative import times: `mcp.server.mcpserver` 886 ms, of which `mcp_types` 315 ms (`mcp_types._types` 142 ms self, `_v2026_07_28` 127 ms, `_v2025_11_25` 97 ms) and `mcp.client` 340 ms; then `uvicorn` 121 ms. Our own package adds ~2 ms. The same import on an Apple-silicon laptop takes ~245 ms.
+- **Expected:** A server-only import of a lightweight MCP server to cost well under 500 ms, and some improvement from more memory/CPU.
+- **Actual:** ~1.15 s Init Duration no matter the memory size. `import mcp.server.mcpserver` runs `mcp/__init__.py`, which imports the client (`Client`, `ClientSession`, `stdio_client`, ...) plus the pydantic models for every protocol revision. Most of `mcp.client`'s 340 ms is `mcp.server` modules imported through `mcp.client._memory`, which the server needs anyway, so a lazy client import would save only ~50 ms.
+- **Severity:** Major (cold requests break the 500 ms budget; no fix possible in our own code)
+- **Time lost:** ~45 minutes
+- **Workaround:** None in our code. Options: provisioned concurrency = 1 (always-on cost) or Lambda SnapStart for Python (not yet measured).
+- **Actionable suggestions:**
+  1. Make `mcp/__init__.py` imports lazy (PEP 562 `__getattr__`) so server-only users don't load the client and stdio stacks.
+  2. Load per-revision `mcp_types` modules only when a session negotiates that revision, or build pydantic models lazily (`defer_build`).
+  3. Document cold-start numbers for serverless hosting.
+- **Evidence:** REPORT lines and the import-time log above (CloudWatch `/aws/lambda/nightwatch-mcp`, 2026-10-15). I'm not certain why memory has no effect on Init Duration; reporting what I measured.
+
+---
+
 ## Watch list (hypotheses to confirm or discard)
 - [ ] Docs say Builders support spec 2025-11-25, but the Alexa+ client `initialize` sends `protocolVersion: "2025-03-26"` (shown on the Client Lifecycle page). Record what you actually observe.
 - [ ] The "401 without `WWW-Authenticate`" requirement conflicts with the MCP auth spec / RFC 9728 guidance and with SDK/API Gateway defaults that add the header.
