@@ -1,6 +1,6 @@
 """Dedupe + publish (moto DynamoDB + EventBridge)."""
 
-from nightwatch_pipeline.ingest.nws import ingest_features
+from nightwatch_pipeline.ingest.nws import ingest_features, normalize
 from nightwatch_pipeline.seed import DEMO_HOUSEHOLD
 
 from .conftest import NOW, RecordingBus, load
@@ -38,4 +38,12 @@ def test_failed_publish_releases_claim(store, bus: RecordingBus, monkeypatch) ->
         raise AssertionError("expected RuntimeError")
     monkeypatch.undo()
     # Claim was released, so the next run publishes it.
-    assert store.claim_signal("nws", feature["properties"]["id"], NOW) is True
+    signal = normalize(feature, DEMO_HOUSEHOLD, NOW)
+    assert signal is not None and store.claim_signal(signal, NOW) is True
+
+
+def test_claim_stores_full_signal(store, bus: RecordingBus) -> None:
+    ingest_features([load("red_flag_warning_update")], DEMO_HOUSEHOLD, store, bus, NOW)
+    (sig,) = store.get_signals([("nws", bus.published[0].external_id)])
+    assert sig.event == "Red Flag Warning"
+    assert "SANTA ANA" in sig.description and sig.instruction

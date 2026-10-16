@@ -2,14 +2,17 @@
 # Package a Python project for Lambda (python3.12, arm64) → dist/<name>.zip.
 #   scripts/build_lambda.sh server   mcp_server nightwatch          (MCP server, adds run.sh)
 #   scripts/build_lambda.sh pipeline pipeline   nightwatch_pipeline (ingest + incident builder)
+#   scripts/build_lambda.sh pipeline triage     nightwatch_pipeline triage  (+ Strands extra)
 # Deps come from the project's uv.lock as aarch64 manylinux wheels only (no local compiles).
 # nightwatch-core (shared/) is a local path dep, so it's copied in as source.
-# boto3 isn't bundled: the Lambda python3.12 runtime provides it.
+# boto3 isn't bundled (the Lambda python3.12 runtime provides it), except where a dependency
+# pins it (Strands, in the triage zip).
 set -euo pipefail
 
 PROJECT="$1"
 NAME="$2"
 MODULE="$3"
+EXTRA="${4:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$ROOT/dist"
 PKG="$DIST/$NAME"
@@ -19,7 +22,7 @@ rm -rf "$PKG" "$ZIP"
 mkdir -p "$PKG"
 
 (cd "$ROOT/$PROJECT" && uv export --frozen --no-dev --no-emit-project \
-  --no-emit-package nightwatch-core --no-hashes \
+  ${EXTRA:+--extra "$EXTRA"} --no-emit-package nightwatch-core --no-hashes \
   --format requirements.txt -o "$DIST/$NAME.requirements.txt" -q)
 
 uvx --python 3.12 pip install -q \
@@ -32,6 +35,7 @@ cp -R "$ROOT/shared/src/nightwatch_core" "$PKG/"
 find "$PKG" -name __pycache__ -type d -prune -exec rm -rf {} +
 
 if [ "$NAME" = "mcp_server" ]; then
+  cp -R "$ROOT/runbooks" "$PKG/runbooks"  # loaded once at init
   cat > "$PKG/run.sh" <<'SH'
 #!/bin/bash
 # Lambda handler: Lambda Web Adapter (AWS_LAMBDA_EXEC_WRAPPER=/opt/bootstrap) runs this.

@@ -1,0 +1,13 @@
+title: Wind advisory
+match:
+  events: ["Wind Advisory", "High Wind Warning", "High Wind Watch"]
+  families: ["wind"]
+steps:
+  - action: Secure or bring in loose outdoor items like trash cans, furniture, and umbrellas
+    why: Gusts can throw loose items into windows, cars, and people.
+  - action: Park away from trees and power lines
+    why: Branches and lines can come down in strong gusts.
+  - action: Charge phones and keep a flashlight handy
+    why: Wind can cause power outages.
+  - action: Drive carefully, especially in tall vehicles
+    why: Crosswinds can push vehicles across lanes.

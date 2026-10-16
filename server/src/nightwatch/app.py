@@ -10,7 +10,8 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from nightwatch import settings as settings_mod
 from nightwatch.domain.fixtures import FixtureSource
 from nightwatch.domain.incidents import IncidentSource
-from nightwatch.tools import incidents
+from nightwatch.domain.runbooks import load_runbooks
+from nightwatch.tools import explain, incidents, runbooks
 
 MCP_PATH = "/mcp"
 # The SDK's defaults when host="127.0.0.1"; kept so `make run` and the Inspector keep working.
@@ -54,6 +55,8 @@ def create_server(source: IncidentSource) -> MCPServer:
         instructions="Household incident commander: home hazards and production on-call alerts.",
     )
     incidents.register(server, source)
+    explain.register(server, source)
+    runbooks.register(server, source, load_runbooks())  # read once at init, no per-request I/O
     server.custom_route("/healthz", methods=["GET"], include_in_schema=False)(healthz)
     return server
 

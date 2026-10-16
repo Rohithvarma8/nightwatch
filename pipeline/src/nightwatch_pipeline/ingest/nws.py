@@ -65,6 +65,8 @@ def normalize(
         # Spoken text may only use place names that appear in the source alert.
         area_name=zone.name if zone.name in area_desc else area_desc.split(";")[0].strip(),
         headline=p.get("headline") or event,
+        description=p.get("description") or "",
+        instruction=p.get("instruction") or "",
         sender_name=p.get("senderName", "National Weather Service"),
         message_type=p["messageType"],
         sent_at=to_utc_iso(p["sent"]),
@@ -96,7 +98,7 @@ def ingest_features(
         signal = normalize(feature, household, now, **normalize_kwargs)
         if signal is None:
             counts["skipped"] += 1
-        elif store.claim_signal(SOURCE, signal.external_id, now):
+        elif store.claim_signal(signal, now):
             fresh.append(signal)
         else:
             counts["duplicate"] += 1

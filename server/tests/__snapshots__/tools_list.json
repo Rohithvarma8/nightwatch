@@ -7,7 +7,7 @@
       "readOnlyHint": true,
       "title": "Active incidents"
     },
-    "description": "Use when the user asks what's going on, whether anything is wrong, or for a status overview of the household. Covers home hazards (weather warnings, air quality, nearby fires) and production on-call alerts. Returns the most severe active incidents, each with a short spoken summary and the single most important action to take.",
+    "description": "Use when the user asks what's going on, whether anything is wrong, or for a status overview of the household. Covers home hazards (weather warnings, air quality, nearby fires) and production on-call alerts. Returns the most severe active incidents (most recent first within a severity), each with a short spoken summary and the single most important action to take. Replayed alerts are labeled and only shown when nothing live covers them.",
     "inputSchema": {
       "properties": {
         "limit": {
@@ -180,5 +180,310 @@
       "type": "object"
     },
     "title": "Active incidents"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Explain an incident"
+    },
+    "description": "Use when the user asks why, how you know, what an alert means, or for more detail about an incident (for example 'why?', 'tell me more about the fire one', 'what's the wind thing'). Defaults to the top-ranked active incident. Pass `reference` with the user's own words to pick a different one. Returns what happened, what it means for the household, the evidence behind it, a confidence level, a timeline, and the sources.",
+    "inputSchema": {
+      "properties": {
+        "depth": {
+          "default": "brief",
+          "description": "brief = top evidence only; full = all evidence + timeline.",
+          "enum": [
+            "brief",
+            "full"
+          ],
+          "title": "Depth",
+          "type": "string"
+        },
+        "incident_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exact incident id from a previous result, if known.",
+          "title": "Incident Id"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How the user referred to it, e.g. 'the fire one' or 'the wind thing'. Matched against titles, alert types, and hazard types.",
+          "title": "Reference"
+        }
+      },
+      "title": "explain_incidentArguments",
+      "type": "object"
+    },
+    "name": "explain_incident",
+    "outputSchema": {
+      "$defs": {
+        "EvidenceItem": {
+          "properties": {
+            "detail": {
+              "title": "Detail",
+              "type": "string"
+            },
+            "source_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Url"
+            },
+            "type": {
+              "title": "Type",
+              "type": "string"
+            },
+            "weight": {
+              "title": "Weight",
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "detail",
+            "weight",
+            "source_url"
+          ],
+          "title": "EvidenceItem",
+          "type": "object"
+        },
+        "TimelineEntry": {
+          "properties": {
+            "at": {
+              "title": "At",
+              "type": "string"
+            },
+            "event": {
+              "title": "Event",
+              "type": "string"
+            }
+          },
+          "required": [
+            "at",
+            "event"
+          ],
+          "title": "TimelineEntry",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceItem"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "replay": {
+          "title": "Replay",
+          "type": "boolean"
+        },
+        "replay_original_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Replay Original Time"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "timeline": {
+          "items": {
+            "$ref": "#/$defs/TimelineEntry"
+          },
+          "title": "Timeline",
+          "type": "array"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "what_happened": {
+          "title": "What Happened",
+          "type": "string"
+        },
+        "what_it_means_for_you": {
+          "title": "What It Means For You",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "what_happened",
+        "what_it_means_for_you",
+        "evidence",
+        "confidence",
+        "timeline",
+        "sources",
+        "replay",
+        "replay_original_time"
+      ],
+      "title": "Explanation",
+      "type": "object"
+    },
+    "title": "Explain an incident"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Runbook for an incident"
+    },
+    "description": "Use when the user asks what to do, what the next step is, or how to handle an incident ('what should I do?', 'what do I do about the wind thing?'). Defaults to the top-ranked active incident; pass `reference` with the user's words to pick another. Returns the next step and the full checklist, each step with why it matters.",
+    "inputSchema": {
+      "properties": {
+        "incident_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exact incident id from a previous result, if known.",
+          "title": "Incident Id"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How the user referred to the incident, e.g. 'the fire one'.",
+          "title": "Reference"
+        }
+      },
+      "title": "get_runbookArguments",
+      "type": "object"
+    },
+    "name": "get_runbook",
+    "outputSchema": {
+      "$defs": {
+        "RunbookStepView": {
+          "properties": {
+            "action": {
+              "title": "Action",
+              "type": "string"
+            },
+            "done": {
+              "title": "Done",
+              "type": "boolean"
+            },
+            "n": {
+              "title": "N",
+              "type": "integer"
+            },
+            "why": {
+              "title": "Why",
+              "type": "string"
+            }
+          },
+          "required": [
+            "n",
+            "action",
+            "why",
+            "done"
+          ],
+          "title": "RunbookStepView",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "incident_id": {
+          "title": "Incident Id",
+          "type": "string"
+        },
+        "incident_title": {
+          "title": "Incident Title",
+          "type": "string"
+        },
+        "next_step": {
+          "title": "Next Step",
+          "type": "string"
+        },
+        "runbook_id": {
+          "title": "Runbook Id",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/RunbookStepView"
+          },
+          "title": "Steps",
+          "type": "array"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "runbook_id",
+        "title",
+        "incident_id",
+        "incident_title",
+        "next_step",
+        "steps"
+      ],
+      "title": "RunbookView",
+      "type": "object"
+    },
+    "title": "Runbook for an incident"
   }
 ]

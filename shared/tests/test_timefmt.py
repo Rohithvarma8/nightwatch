@@ -13,8 +13,8 @@ NOW = datetime.fromisoformat("2026-10-15T18:00:00-07:00")  # Thursday
 @pytest.mark.parametrize(
     ("ends_at", "expected"),
     [
-        ("2026-10-16T03:00:00Z", "8 PM"),  # 8 PM Thu local
-        ("2026-10-16T19:30:00Z", "12:30 PM tomorrow"),
+        ("2026-10-16T03:00:00Z", "8 PM Thursday"),  # same day: still absolute
+        ("2026-10-16T19:30:00Z", "12:30 PM Friday"),
         ("2026-10-18T03:00:00Z", "8 PM Saturday"),
         ("2026-10-30T03:00:00Z", "8 PM October 29"),
     ],

@@ -9,6 +9,10 @@ dependencies = [
     "aws-lambda-powertools>=3",
 ]
 
+[project.optional-dependencies]
+# Only the triage Lambda zip (scripts/build_lambda.sh ... triage) bundles Strands.
+triage = ["strands-agents==1.61.1"]
+
 [tool.uv.sources]
 nightwatch-core = { path = "../shared", editable = true }
 

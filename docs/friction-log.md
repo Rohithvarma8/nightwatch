@@ -143,6 +143,43 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
 
 ---
 
+### FL-008: Claude Haiku 5.5 inference profile listed ACTIVE, but invoking it is denied
+
+- **Product / tool:** Amazon Bedrock (us-west-2), cross-region inference profile `us.anthropic.claude-haiku-5-5`
+- **Date:** 2026-10-16
+- **Task attempted:** Choose the fallback model for the triage agent (plan: Amazon Nova Lite first, then Claude Haiku).
+- **Steps taken:**
+  1. `aws bedrock list-inference-profiles --region us-west-2` lists `us.anthropic.claude-haiku-5-5` and `global.anthropic.claude-haiku-5-5`, both `ACTIVE`. `list-foundation-models` lists `anthropic.claude-haiku-5-5` with inference type `INFERENCE_PROFILE`.
+  2. `aws bedrock-runtime converse --region us-west-2 --model-id us.anthropic.claude-haiku-5-5 --messages '[{"role":"user","content":[{"text":"Reply with the single word: ok"}]}]'`
+- **Expected:** A response, or a listing that shows the model isn't usable by this account.
+- **Actual:** `AccessDeniedException ... anthropic.claude-haiku-5-5 is not available for this account. You can explore other available models on Amazon Bedrock. For additional access options, contact AWS Sales`. The same call to `us.anthropic.claude-haiku-4-5-20251001-v1:0` and to `amazon.nova-lite-v1:0` succeeds.
+- **Severity:** Minor
+- **Time lost:** ~10 minutes
+- **Workaround:** Fallback model is Claude Haiku 4.5 (`us.anthropic.claude-haiku-4-5-20251001-v1:0`), set as the Terraform variable `triage_fallback_model_id`, so switching to 5.5 later is a one-line change.
+- **Actionable suggestion:** Have the listing APIs show whether the calling account can invoke each model (or filter on it), and make the error say how to get access instead of pointing to Sales.
+- **Evidence:** CLI output above. Unsure whether this is an account-tier restriction or a rollout state; reporting as observed.
+
+---
+
+### FL-009: Claude Haiku 4.5 on Bedrock worked once, then every call fails until a use-case form is submitted
+
+- **Product / tool:** Amazon Bedrock (us-west-2), inference profile `us.anthropic.claude-haiku-4-5-20251001-v1:0`
+- **Date:** 2026-10-16
+- **Task attempted:** Use Claude Haiku 4.5 as the triage agent's fallback model.
+- **Steps taken:**
+  1. ~21:30Z, from my laptop: `aws bedrock-runtime converse --region us-west-2 --model-id us.anthropic.claude-haiku-4-5-20251001-v1:0 --messages '[{"role":"user","content":[{"text":"Reply with the single word: ok"}]}]'` → `ok` (1.3 s).
+  2. ~22:45Z, the triage Lambda (Strands `BedrockModel`, Converse) called the same model ID.
+  3. ~22:50Z, re-ran the CLI command from step 1.
+- **Expected:** The same result every time, or the first call failing too.
+- **Actual:** Steps 2 and 3 both fail: `ResourceNotFoundException: ... Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model. If you have already filled out the form, try again in 15 minutes.` Bedrock reports a missing account-level form as `ResourceNotFound`, and step 1 had already succeeded, so it looked like model access was working.
+- **Severity:** Minor (Nova Lite is primary; the template covers failures)
+- **Time lost:** ~15 minutes
+- **Workaround:** Submit the Anthropic use case details form in the Bedrock console (pending). Until then Haiku attempts fail fast and the template is kept (`summarizer.fallback_used=true`).
+- **Actionable suggestion:** Return an access-specific error (`AccessDeniedException` with a link to the form), and don't let a first call succeed if later calls will be rejected.
+- **Evidence:** Triage Lambda log `attempts[1].error` (CloudWatch `/aws/lambda/nightwatch-triage`, 2026-10-16 ~22:45Z) and the CLI output above. Unsure whether the first success came from a grace period; reporting as observed.
+
+---
+
 ## Watch list (hypotheses to confirm or discard)
 - [ ] Docs say Builders support spec 2025-11-25, but the Alexa+ client `initialize` sends `protocolVersion: "2025-03-26"` (shown on the Client Lifecycle page). Record what you actually observe.
 - [ ] The "401 without `WWW-Authenticate`" requirement conflicts with the MCP auth spec / RFC 9728 guidance and with SDK/API Gateway defaults that add the header.

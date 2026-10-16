@@ -1,0 +1,12 @@
+title: Heat
+match:
+  families: ["heat"]
+steps:
+  - action: Stay in air conditioning during the hottest part of the day
+    why: Heat illness builds over hours of exposure.
+  - action: Drink water regularly, even before you feel thirsty
+    why: Thirst lags behind dehydration.
+  - action: Check on older neighbors, young kids, and pets
+    why: They are the most vulnerable to heat.
+  - action: Never leave anyone in a parked car
+    why: A closed car heats up dangerously within minutes.
