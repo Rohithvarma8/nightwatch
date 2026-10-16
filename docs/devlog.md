@@ -1,0 +1,5 @@
+# Devlog
+
+### 2026-10-15 · Day 2: MCP server deployed to AWS
+- `make deploy` path works: Lambda (python3.12 arm64, 512 MB, Lambda Web Adapter v1.1.0) + HTTP API, 11 resources. Live: `https://2wj4gc9lz8.execute-api.us-west-2.amazonaws.com/mcp`. Verified on the live URL: `initialize` with 2025-03-26 and 2025-11-25 (each returns the version requested), `tools/list`, `tools/call get_active_incidents`, GET `/mcp` → 405 (no `WWW-Authenticate`), `/healthz` → ok. Needed `MCP_ALLOWED_HOSTS` because the SDK returned 421 for the API Gateway host (FL-005).
+- Latency (curl from a laptop, new TLS connection per call): **cold 1.77 s** (Init 1235 ms); **warm 0.16–0.25 s** (`initialize` 0.213 / 0.228 / 0.229 / 0.157 / 0.201 s), with the Lambda handler itself at 2–6 ms. Init stays at ~1.15 s whether the function has 512, 1024 or 1769 MB; ~0.9 s of it is importing the MCP SDK (FL-006). Decision: accept cold starts until the demo; turn on provisioned concurrency = 1 (`make warm-on`) only Oct 20–22 and Nov 9–20.
