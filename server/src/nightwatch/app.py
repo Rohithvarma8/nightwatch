@@ -1,7 +1,5 @@
 """Night Watch MCP server entry point: `uvicorn nightwatch.app:asgi`."""
 
-import os
-
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
@@ -9,10 +7,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from nightwatch import settings as settings_mod
+from nightwatch.domain.fixtures import FixtureSource
+from nightwatch.domain.incidents import IncidentSource
 from nightwatch.tools import incidents
 
 MCP_PATH = "/mcp"
-ALLOWED_HOSTS_ENV = "MCP_ALLOWED_HOSTS"
 # The SDK's defaults when host="127.0.0.1"; kept so `make run` and the Inspector keep working.
 LOCAL_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
 LOCAL_ORIGINS = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
@@ -38,14 +38,22 @@ async def healthz(_: Request) -> Response:
     return JSONResponse({"status": "ok"})
 
 
-def create_server() -> MCPServer:
+def incident_source(cfg: settings_mod.Settings) -> IncidentSource:
+    if cfg.table_name is None:
+        return FixtureSource()
+    from nightwatch.store.incidents import DynamoIncidentSource  # boto3 only when configured
+
+    return DynamoIncidentSource(cfg.table_name, cfg.household_id)
+
+
+def create_server(source: IncidentSource) -> MCPServer:
     server = MCPServer(
         name="nightwatch",
         title="Night Watch",
         version="0.1.0",
         instructions="Household incident commander: home hazards and production on-call alerts.",
     )
-    incidents.register(server)
+    incidents.register(server, source)
     server.custom_route("/healthz", methods=["GET"], include_in_schema=False)(healthz)
     return server
 
@@ -66,11 +74,12 @@ def transport_security(allowed_hosts: str) -> TransportSecuritySettings:
 
 def create_app() -> tuple[Starlette, ASGIApp]:
     """Return (mcp_app, asgi). mcp_app owns the lifespan; asgi is what uvicorn serves."""
-    mcp_app = create_server().streamable_http_app(
+    cfg = settings_mod.load()
+    mcp_app = create_server(incident_source(cfg)).streamable_http_app(
         streamable_http_path=MCP_PATH,
         stateless_http=True,
         json_response=True,
-        transport_security=transport_security(os.environ.get(ALLOWED_HOSTS_ENV, "")),
+        transport_security=transport_security(cfg.allowed_hosts),
     )
     return mcp_app, RejectGetStream(mcp_app)
 

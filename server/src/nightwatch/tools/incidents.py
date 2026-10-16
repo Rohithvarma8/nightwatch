@@ -7,11 +7,13 @@ from mcp.server.mcpserver import MCPServer
 from mcp_types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 
-from nightwatch.domain.fixtures import FIXTURE_INCIDENTS
-from nightwatch.domain.incidents import MAX_LIMIT, build_active_incidents, select_active
+from nightwatch.domain.incidents import (
+    MAX_LIMIT,
+    IncidentSource,
+    build_active_incidents,
+    select_active,
+)
 from nightwatch.domain.models import ActiveIncidents, Scope, Severity
-
-HOUSEHOLD = "Demo Household"
 
 DESCRIPTION = (
     "Use when the user asks what's going on, whether anything is wrong, or for a status "
@@ -21,7 +23,7 @@ DESCRIPTION = (
 )
 
 
-def register(server: MCPServer) -> None:
+def register(server: MCPServer, source: IncidentSource) -> None:
     @server.tool(
         name="get_active_incidents",
         title="Active incidents",
@@ -45,9 +47,10 @@ def register(server: MCPServer) -> None:
             int, Field(ge=1, le=MAX_LIMIT, description="Maximum incidents to return.")
         ] = 3,
     ) -> Annotated[CallToolResult, ActiveIncidents]:
-        selected = select_active(FIXTURE_INCIDENTS, scope, min_severity, limit)
-        as_of = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        result = build_active_incidents(selected, HOUSEHOLD, as_of)
+        now = datetime.now(UTC)
+        selected = select_active(source.active_incidents(now), scope, min_severity, limit)
+        as_of = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        result = build_active_incidents(selected, source.household_name(), as_of)
         return CallToolResult(
             content=[TextContent(type="text", text=result.spoken_overview)],
             structured_content=result.model_dump(mode="json"),

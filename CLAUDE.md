@@ -50,7 +50,8 @@ make build          # build Lambda zips (aarch64 wheels) into dist/
 make deploy         # build + terraform apply (envs/dev) + print MCP URL; prints REDEPLOY ADD-ON warning if tool schemas changed
 make addon-deploy   # cd addon && alexa-ai deploy
 make local-inspect  # addon-local-inspector $(MCP_URL)
-make replay SCENARIO=redflag-xxxx T0=-4m
+make seed-household # write the demo household (Simi Valley, NWS zone CAZ374) to the dev table
+make replay FILE=~/nightwatch-alert-archive/archive/nws/<day>/<id>.json   # time-shifted, replay=true
 make bad-deploy / make good-deploy   # demo-service via CodeDeploy
 make slo            # mcp-slo run --url $(MCP_URL) --profile alexa --slo 'p95<500ms'
 ```

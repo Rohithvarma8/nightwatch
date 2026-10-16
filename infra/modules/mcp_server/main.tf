@@ -39,6 +39,20 @@ resource "aws_iam_role_policy" "logs" {
   policy = data.aws_iam_policy_document.logs.json
 }
 
+# Hot path is DynamoDB-only and read-only: household profile GetItem + GSI1 Query.
+data "aws_iam_policy_document" "table_read" {
+  statement {
+    actions   = ["dynamodb:GetItem", "dynamodb:Query"]
+    resources = [var.table_arn, "${var.table_arn}/index/GSI1"]
+  }
+}
+
+resource "aws_iam_role_policy" "table_read" {
+  name   = "table-read"
+  role   = aws_iam_role.this.id
+  policy = data.aws_iam_policy_document.table_read.json
+}
+
 # --- Lambda (uvicorn behind Lambda Web Adapter) -----------------------------
 
 resource "aws_lambda_function" "this" {
@@ -60,10 +74,16 @@ resource "aws_lambda_function" "this" {
       AWS_LWA_PORT                 = "8080"
       AWS_LWA_READINESS_CHECK_PATH = "/healthz"
       MCP_ALLOWED_HOSTS            = local.api_host
+      NIGHTWATCH_TABLE             = var.table_name
+      HOUSEHOLD_ID                 = var.household_id
     }
   }
 
-  depends_on = [aws_cloudwatch_log_group.this, aws_iam_role_policy.logs]
+  depends_on = [
+    aws_cloudwatch_log_group.this,
+    aws_iam_role_policy.logs,
+    aws_iam_role_policy.table_read,
+  ]
 }
 
 resource "aws_lambda_alias" "live" {

@@ -4,12 +4,19 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Kind = Literal["hazard", "prod"]
-Severity = Literal["critical", "high", "moderate", "low"]
-Status = Literal["open", "acknowledged", "escalated", "resolved"]
-Scope = Literal["all", "home", "work"]
+from nightwatch_core.models import SEVERITY_RANK, Kind, Severity, Status
 
-SEVERITY_RANK: dict[Severity, int] = {"critical": 0, "high": 1, "moderate": 2, "low": 3}
+__all__ = [
+    "SEVERITY_RANK",
+    "ActiveIncidents",
+    "IncidentView",
+    "Kind",
+    "Scope",
+    "Severity",
+    "Status",
+]
+
+Scope = Literal["all", "home", "work"]
 
 
 class IncidentView(BaseModel):
