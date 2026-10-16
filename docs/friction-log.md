@@ -119,6 +119,30 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
 
 ---
 
+### FL-007: Terraform AWS provider deprecation warning points at the wrong `range_key`
+
+- **Product / tool:** Terraform AWS provider `hashicorp/aws` 6.68.0, `aws_dynamodb_table`
+- **Date:** 2026-10-15
+- **Task attempted:** Define the single table with a GSI the way most examples show: `hash_key` / `range_key` on the table and inside `global_secondary_index`.
+- **Steps taken:** `terraform -chdir=infra/envs/dev validate`
+- **Expected:** No warning, or a warning that names the nested block.
+- **Actual:**
+  ```
+  Warning: Argument is deprecated
+    with module.data.aws_dynamodb_table.this,
+    on ../../modules/data/main.tf line 2, in resource "aws_dynamodb_table" "this":
+  range_key is deprecated. Use key_schema instead.
+  (and one more similar warning elsewhere)
+  ```
+  The warning points at the resource's first line and says `range_key`, which reads like the table-level `range_key`. But `terraform providers schema -json` shows the table-level `hash_key`/`range_key` are **not** deprecated; only `global_secondary_index.hash_key`/`range_key` are, and the replacement is a `key_schema { attribute_name, key_type }` block **inside the GSI**. There is no table-level `key_schema` block.
+- **Severity:** Minor
+- **Time lost:** ~10 minutes
+- **Workaround:** Inspected `terraform providers schema -json` for `aws_dynamodb_table`, then moved the GSI keys into two `key_schema` blocks (`infra/modules/data/main.tf`). The table keeps `hash_key`/`range_key`.
+- **Actionable suggestion:** Point the diagnostic at the nested `global_secondary_index` attribute, and name it in the message ("global_secondary_index.range_key is deprecated; use global_secondary_index.key_schema").
+- **Evidence:** validate output above; provider schema dump (`hash_key`/`range_key` deprecated only under `global_secondary_index`). Unsure whether this is Terraform core's diagnostic placement or the provider's; reporting as observed.
+
+---
+
 ## Watch list (hypotheses to confirm or discard)
 - [ ] Docs say Builders support spec 2025-11-25, but the Alexa+ client `initialize` sends `protocolVersion: "2025-03-26"` (shown on the Client Lifecycle page). Record what you actually observe.
 - [ ] The "401 without `WWW-Authenticate`" requirement conflicts with the MCP auth spec / RFC 9728 guidance and with SDK/API Gateway defaults that add the header.
