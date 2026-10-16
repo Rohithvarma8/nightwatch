@@ -1,4 +1,6 @@
-"""Hard-coded Day 1 incidents. Replaced by the DynamoDB store once ingest lands."""
+"""Hard-coded incidents for tests and for `make run` without a table (NIGHTWATCH_TABLE unset)."""
+
+from datetime import datetime
 
 from nightwatch.domain.models import IncidentView
 
@@ -38,3 +40,11 @@ FIXTURE_INCIDENTS: list[IncidentView] = [
         replay_original_time=None,
     ),
 ]
+
+
+class FixtureSource:
+    def household_name(self) -> str:
+        return "Demo Household"
+
+    def active_incidents(self, now: datetime) -> list[IncidentView]:
+        return FIXTURE_INCIDENTS

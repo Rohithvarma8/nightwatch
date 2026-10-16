@@ -3,3 +3,15 @@ variable "provisioned_concurrency" {
   type        = number
   default     = 0
 }
+
+variable "household_ids" {
+  description = "Households the pipeline ingests for. The first is the one the MCP tools read."
+  type        = list(string)
+  default     = ["hh_demo"]
+}
+
+variable "nws_user_agent" {
+  description = "User-Agent for api.weather.gov: \"(app-name, contact@email)\". Set in terraform.tfvars (gitignored)."
+  type        = string
+  sensitive   = true
+}

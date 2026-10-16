@@ -1,5 +1,8 @@
 """Filtering, ranking, and spoken formatting for active incidents."""
 
+from datetime import datetime
+from typing import Protocol
+
 from nightwatch.domain.models import (
     SEVERITY_RANK,
     ActiveIncidents,
@@ -7,10 +10,43 @@ from nightwatch.domain.models import (
     Scope,
     Severity,
 )
+from nightwatch_core.models import Incident
+from nightwatch_core.timefmt import parse_utc
 
 MAX_LIMIT = 5
 _SCOPE_KIND = {"home": "hazard", "work": "prod"}
 _COUNT_WORDS = ["Nothing", "One thing", "Two things", "Three things", "Four things", "Five things"]
+EVIDENCE_PREVIEW = 2
+
+
+class IncidentSource(Protocol):
+    """Where the tool reads active incidents from (DynamoDB in prod, fixture in tests)."""
+
+    def household_name(self) -> str: ...
+
+    def active_incidents(self, now: datetime) -> list[IncidentView]: ...
+
+
+def is_active(incident: Incident, now: datetime) -> bool:
+    """Still open and its alert hasn't ended (the sweep may not have run yet)."""
+    return incident.status != "resolved" and parse_utc(incident.ends_at) > now
+
+
+def to_view(incident: Incident) -> IncidentView:
+    return IncidentView(
+        id=incident.id,
+        kind=incident.kind,
+        title=incident.title,
+        severity=incident.severity,
+        status=incident.status,
+        started_at=incident.started_at,
+        spoken_summary=incident.spoken_summary,
+        top_action=incident.top_action,
+        evidence_preview=[e.detail for e in incident.evidence[:EVIDENCE_PREVIEW]],
+        escalation_due_at=None,
+        replay=incident.replay,
+        replay_original_time=incident.replay_original_time,
+    )
 
 
 def select_active(

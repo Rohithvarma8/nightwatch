@@ -1,0 +1,2 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+nws_user_agent = "(your-app-name, you@example.com)"

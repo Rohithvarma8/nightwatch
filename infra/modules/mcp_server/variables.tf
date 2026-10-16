@@ -50,3 +50,19 @@ variable "throttle_burst_limit" {
   type        = number
   default     = 50
 }
+
+variable "table_name" {
+  description = "DynamoDB table the tools read (NIGHTWATCH_TABLE)."
+  type        = string
+}
+
+variable "table_arn" {
+  description = "DynamoDB table ARN (read-only access is granted on it and its GSI1)."
+  type        = string
+}
+
+variable "household_id" {
+  description = "Household the tools read (single demo household until account linking)."
+  type        = string
+  default     = "hh_demo"
+}

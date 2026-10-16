@@ -3,7 +3,7 @@
 import httpx2
 import pytest
 
-from nightwatch.app import ALLOWED_HOSTS_ENV, MCP_PATH, create_app
+from nightwatch.app import MCP_PATH, create_app
 
 pytestmark = pytest.mark.anyio
 
@@ -51,5 +51,5 @@ async def test_allowed_hosts(
     headers: dict[str, str] | None,
     expected: int,
 ) -> None:
-    monkeypatch.setenv(ALLOWED_HOSTS_ENV, env)
+    monkeypatch.setenv("MCP_ALLOWED_HOSTS", env)
     assert await post_initialize(base_url, headers) == expected

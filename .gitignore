@@ -32,6 +32,9 @@ override.tf.json
 *_override.tf.json
 # make warm-on / warm-off toggle (local only)
 warm.auto.tfvars
+# Real values (NWS User-Agent contact); commit only *.tfvars.example
+*.tfvars
+!*.tfvars.example
 
 # OS / editor
 .DS_Store

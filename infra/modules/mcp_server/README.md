@@ -9,12 +9,14 @@ API Gateway HTTP API (`$default` stage, routes `ANY /mcp` and `GET /healthz`, no
   protection answers every request with 421.
 - API Gateway invokes the `live` alias. To turn on provisioned concurrency later, set
   `provisioned_concurrency > 0` (it bills around the clock).
-- The IAM role grants CloudWatch Logs writes only.
+- The IAM role can write CloudWatch Logs and read the table: `GetItem` + `Query` on the table and GSI1. Nothing else.
 - No VPC.
 
 | Input | Default | |
 |---|---|---|
 | `zip_path` | (required) | `dist/mcp_server.zip` from `make build` |
+| `table_name` / `table_arn` | (required) | from `modules/data` |
+| `household_id` | `hh_demo` | |
 | `memory_size` / `timeout` | 512 / 15 | |
 | `provisioned_concurrency` | 0 | |
 | `log_retention_days` | 7 | |
