@@ -48,7 +48,7 @@ Verified against Amazon/Devpost/MCP docs on Oct 12, 2026. Re-check anything mark
 → Do all reasoning **at ingest time**. A Strands triage agent writes `spoken_summary`, `detail_summary`, and `recommended_actions` into DynamoDB. Tools are pure DynamoDB reads (single-digit ms) plus formatting. Target p95 under 150 ms server-side.
 
 **G2. Cold starts.** Python + MCP SDK + pydantic + boto3 cold starts run 600 ms–1.5 s.
-→ Use arm64, lazy-import boto3 clients, and **provisioned concurrency = 1** on the MCP function (about $3–6/month at 512 MB). SnapStart for Python is the alternative, but provisioned concurrency is simpler and composes cleanly with Lambda Web Adapter. Measure both on Day 2 if you have time.
+→ **Decision (Oct 16): no provisioned concurrency.** The demo is a recorded video, so warm the MCP function by hand (a few `tools/call` requests) right before recording. `make warm-on` exists but is optional. Original idea: arm64, lazy-import boto3 clients, and provisioned concurrency = 1 on the MCP function (about $3–6/month at 512 MB). SnapStart for Python is the alternative, but provisioned concurrency is simpler and composes cleanly with Lambda Web Adapter. Measure both on Day 2 if you have time.
 
 **G3. Correlation must be deterministic and explainable, not "LLM magic."**
 → Use a rules engine that emits typed `Evidence` records (`deploy_proximity`, `same_service`, `geo_overlap`, `same_hazard_family`, `aqi_category`) with weights. The LLM only *narrates* that evidence and is forbidden from adding facts (enforced with a JSON-schema output check and a template fallback). This is your differentiator. Say it in the video.
@@ -81,7 +81,7 @@ Verified against Amazon/Devpost/MCP docs on Oct 12, 2026. Re-check anything mark
                           API Gateway HTTP API (custom domain optional)
                                          │
                          Lambda: mcp-server (Python, MCP SDK v2,
-                         Lambda Web Adapter, PC=1, arm64)
+                         Lambda Web Adapter, arm64)
                          tools = DynamoDB reads/writes only
                                          │
      ┌──────────────────────── DynamoDB (single table) ─────────────────────────┐
@@ -143,7 +143,7 @@ Every day ends with: `git push`, a friction-log pass, and 2 lines in `docs/devlo
 - **Deliverable:** a local MCP server works in Inspector, and the recorder is running.
 
 ### Day 2 · Tue Oct 13: Spike, part B (gate day)
-- [ ] Terraform `mcp_server` + `static_site` modules: Lambda (arm64, Lambda Web Adapter, PC=1) + HTTP API; S3/CloudFront with privacy/terms/icons/carousel.
+- [ ] Terraform `mcp_server` + `static_site` modules: Lambda (arm64, Lambda Web Adapter; provisioned concurrency dropped, see G2) + HTTP API; S3/CloudFront with privacy/terms/icons/carousel.
 - [ ] Verify by hand: `initialize` at 2025-03-26 and 2025-11-25 both succeed; GET returns 405.
 - [ ] Add the auth middleware behind `AUTH_MODE=none|jwt`. In `jwt` mode, check with curl that an unauthenticated `tools/call` returns **401 with no `WWW-Authenticate`**, while `initialize`/`tools/list` still pass.
 - [ ] Onboard via the Agent Skill → `addon.json` → `alexa-ai deploy`.
@@ -198,7 +198,7 @@ Every day ends with: `git push`, a friction-log pass, and 2 lines in `docs/devlo
 ### Day 9 · Tue Oct 20: mcp-slo, day 2 + hardening + auth spike
 - [ ] mcp-slo: auth-failure probes, `--profile alexa`, JUnit + Markdown summary, `action.yml`, README with a GIF, v0.1.0 release.
 - [ ] Night Watch CI: run mcp-slo against the deployed endpoint on push to main. Badge in README.
-- [ ] Latency hardening: confirm PC=1, trim imports, cap p95. Screenshot the dashboard.
+- [ ] Latency hardening: trim imports, cap warm p95; warm by hand before recording (no provisioned concurrency). Screenshot the dashboard.
 - [ ] **Auth spike, hard 4-hour cap** (see DESIGN.md §6). Ship it or drop it. Either way, it becomes friction-log entries.
 - **Deliverable:** OSS project released; CI proves the SLO.
 
@@ -224,7 +224,7 @@ Every day ends with: `git push`, a friction-log pass, and 2 lines in `docs/devlo
 |---|---|---|---|
 | R1 | No Alexa+ builder access yet | ? / Fatal | Check in the first hour. Request Private Preview now. Fallback: the rules allow a "simulated Alexa+ experience," but that's a much weaker entry. |
 | R2 | Simulator can't connect (protocol/version/transport quirks) | Med / High | Day-2 gate. Capture raw requests in CloudWatch logs. Accept 2025-03-26. Ask on the forum early. |
-| R3 | p95 > 500 ms (cold starts, LLM in path) | High / High | G1 + G2. Measure with mcp-slo daily. PC=1. DynamoDB-only hot path. |
+| R3 | p95 > 500 ms (cold starts, LLM in path) | High / High | G1 + G2. Measure with mcp-slo daily. Warm by hand before recording (no provisioned concurrency). DynamoDB-only hot path. |
 | R4 | Account linking: Cognito lacks RFC 8414; `resource` param handling; deploy blocked without S256 | High / Med | Optional feature. 4-hour time box. Self-host the metadata doc. Drop cleanly. |
 | R5 | No real Red Flag Warning during the window | Med / Med | Recorder from Day 1 plus archived-alert fallback. Honest "replay" labeling. |
 | R6 | SMS blocked (origination identity registration) | High / Low | ntfy + email. Mention SMS as future work. |
@@ -234,7 +234,7 @@ Every day ends with: `git push`, a friction-log pass, and 2 lines in `docs/devlo
 | R10 | Third-party API terms/rate limits (NWS, AirNow, NIFC) | Low / Med | Cache, back off, proper User-Agent, attribute sources in README. |
 | R11 | MCP Apps card doesn't render in the simulator | Med / Med | Text-first responses always complete. Card is an enhancement. Log the friction. |
 | R12 | Running out of time on video/write-up | Med / High | Templates now. Friction log written as you go. Draft submitted Thursday. |
-| R13 | AWS bill surprise | Low / Med | Budget alarm. PC=1 only on the MCP function. Load generator stops after Nov 20. |
+| R13 | AWS bill surprise | Low / Med | Budget alarm. No provisioned concurrency. Load generator stops after Nov 20. |
 
 ### Stretch list (only after Cut Line B is green)
 1. `rollback_deploy` tool with explicit confirmation → triggers CodeDeploy rollback ("Alexa, roll it back").

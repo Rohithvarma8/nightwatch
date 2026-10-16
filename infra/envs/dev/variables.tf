@@ -1,5 +1,5 @@
 variable "provisioned_concurrency" {
-  description = "Provisioned concurrency for the MCP server. 0 = off; set to 1 to remove cold starts (always-on cost)."
+  description = "Optional provisioned concurrency for the MCP server. Not used (0): we warm by hand before recording. 1 removes cold starts but bills always-on."
   type        = number
   default     = 0
 }

@@ -26,6 +26,12 @@ _NOT_PLACES = {
     "Warning", "Watch", "Advisory", "Statement", "Wind", "High", "Fire", "Heat", "Air",
     "Quality", "Alert", "Freeze", "Frost", "Beach", "Hazards", "Excessive", "Extreme",
 }  # fmt: skip
+# Generic geographic nouns that can be shared across a coordination: the source's "Los Angeles
+# and Ventura Counties" grounds "Los Angeles Counties" if "Los Angeles" and "counties" both appear.
+_GEO_NOUNS = {
+    "county", "counties", "valley", "valleys", "coast", "coasts", "mountains", "beaches",
+    "area", "areas", "region",
+}  # fmt: skip
 _CAPITALIZED_RUN = re.compile(r"[A-Z][a-zA-Z.'-]*(?:\s+[A-Z][a-zA-Z.'-]*)*")
 _SENTENCE_START = re.compile(r"(?:^|[.!?:;]\s+|\n)$")
 
@@ -82,6 +88,18 @@ def _place_candidates(text: str) -> list[tuple[str, ...]]:
     return out
 
 
+def _grounded_name(name: str, source: str, source_words: set[str]) -> bool:
+    if _norm(name) in source:
+        return True
+    *core, last = name.split()
+    return (
+        bool(core)
+        and last.lower() in _GEO_NOUNS
+        and last.lower() in source_words
+        and (_norm(" ".join(core)) in source)
+    )
+
+
 def check(output_texts: list[str], source_text: str) -> GroundingResult:
     source = _norm(source_text)
     source_nums = _source_numbers(source_text)
@@ -95,6 +113,6 @@ def check(output_texts: list[str], source_text: str) -> GroundingResult:
             if word not in source_words:
                 violations.append(f"time word {word!r} not in source")
         for options in _place_candidates(text):
-            if not any(_norm(o) in source for o in options):
+            if not any(_grounded_name(o, source, source_words) for o in options):
                 violations.append(f"name {options[0]!r} not in source")
     return GroundingResult(passed=not violations, violations=violations)

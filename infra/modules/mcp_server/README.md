@@ -7,8 +7,8 @@ API Gateway HTTP API (`$default` stage, routes `ANY /mcp` and `GET /healthz`, no
 - Lambda Web Adapter waits for `GET /healthz` before it sends traffic.
 - `MCP_ALLOWED_HOSTS` is set to the execute-api domain. Without it, the SDK's DNS-rebinding
   protection answers every request with 421.
-- API Gateway invokes the `live` alias. To turn on provisioned concurrency later, set
-  `provisioned_concurrency > 0` (it bills around the clock).
+- API Gateway invokes the `live` alias. Provisioned concurrency is optional and off
+  (`provisioned_concurrency = 0`); we warm the function by hand before recording.
 - The IAM role can write CloudWatch Logs and read the table: `GetItem` + `Query` on the table and GSI1. Nothing else.
 - No VPC.
 

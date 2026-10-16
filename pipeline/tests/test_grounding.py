@@ -8,7 +8,8 @@ SOURCE = (
     "HEADLINE: Red Flag Warning issued October 15 at 1:16PM PDT until October 17 at 8:00PM PDT "
     "by NWS Los Angeles/Oxnard CA\n"
     "DESCRIPTION: ...HIGH RISK FOR RAPID FIRE GROWTH THROUGH SATURDAY, DUE TO MODERATE TO "
-    "LOCALLY STRONG SANTA ANA WINDS AND LOW RELATIVE HUMIDITY... Humidities 8 to 15 percent.\n"
+    "LOCALLY STRONG SANTA ANA WINDS AND LOW RELATIVE HUMIDITY... Humidities 8 to 15 percent. "
+    "Red Flag Warnings for most of Los Angeles and Ventura Counties through Saturday.\n"
     "EVIDENCE: NWS Red Flag Warning, Southeastern Ventura County Valleys"
 )
 
@@ -21,6 +22,8 @@ SOURCE = (
         "Strong Santa Ana winds and humidity as low as 8 percent make fires spread fast.",
         "Gusty Santa Ana winds continue through Saturday.",
         "Avoid anything that could spark a fire.",
+        # Seen live from Nova Lite: coordination rephrased, both names in the source.
+        "Fire danger is high across Ventura and Los Angeles Counties.",
     ],
 )
 def test_grounded_text_passes(text: str) -> None:
@@ -35,6 +38,7 @@ def test_grounded_text_passes(text: str) -> None:
         ("The warning lasts until Sunday.", "time word 'sunday'"),  # invented day
         ("It ends tomorrow evening.", "time word 'tomorrow'"),  # relative day not in source
         ("Fire risk is high near Thousand Oaks.", "name 'Thousand Oaks'"),  # invented place
+        ("It also covers Kern and Ventura Counties.", "name 'Kern'"),  # invented county
     ],
 )
 def test_invented_facts_are_rejected(text: str, violation: str) -> None:
