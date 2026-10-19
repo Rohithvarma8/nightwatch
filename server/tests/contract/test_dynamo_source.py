@@ -115,7 +115,22 @@ def table(monkeypatch: pytest.MonkeyPatch) -> Iterator[object]:
                 }
             ],
         )
-        t.put_item(Item={"PK": "HH#hh_demo", "SK": "PROFILE", "name": "Demo Household"})
+        t.put_item(
+            Item={"PK": "HH#hh_demo", "SK": "PROFILE", "name": "Demo Household",
+                  "tz": "America/Los_Angeles"}
+        )  # fmt: skip
+        t.put_item(
+            Item={"PK": "HH#hh_demo", "SK": "CONTACT#c_priya", "id": "c_priya",
+                  "household_id": "hh_demo", "name": "Priya", "aliases": ["roommate"],
+                  "channels": {"ntfy": True, "email": "priya@example.com"},
+                  "escalation_order": 1}
+        )  # fmt: skip
+        t.put_item(
+            Item={"PK": "HH#hh_demo", "SK": "POLICY#escalation", "household_id": "hh_demo",
+                  "min_severity": "high", "contact_ids": ["c_priya"]}
+        )  # fmt: skip
+        topic = boto3.client("sns").create_topic(Name="nightwatch-notify")["TopicArn"]
+        monkeypatch.setenv("NOTIFY_TOPIC_ARN", topic)
         yield t
 
 
@@ -213,3 +228,78 @@ async def test_tool_handler_under_50ms(table, tool, args) -> None:
             times.append((time.perf_counter() - start) * 1000)
             assert not result.is_error
     assert sorted(times)[len(times) // 2] < 50, times
+
+
+def _events(table, iid: str) -> list[str]:
+    items = table.query(
+        KeyConditionExpression="PK = :p AND begins_with(SK, :e)",
+        ExpressionAttributeValues={":p": f"INC#{iid}", ":e": "EVT#"},
+    )["Items"]
+    return sorted(i["type"] for i in items)
+
+
+async def test_acknowledge_writes_status_and_timeline(table) -> None:
+    _put(table, _incident("inc_rfw", "Red Flag Warning", "high", ends_in=timedelta(days=2)))
+    async with connect() as client:
+        result = await client.call_tool("acknowledge", {"incident_id": "inc_rfw"})
+    assert not result.is_error
+    item = table.get_item(Key={"PK": "INC#inc_rfw", "SK": "META"})["Item"]
+    assert item["status"] == "acknowledged" and item["acked_at"] and item["version"] == 1
+    assert item["GSI1PK"] == "HH#hh_demo#ACTIVE"  # still active, still listed
+    assert _events(table, "inc_rfw") == ["acknowledged"]
+
+
+async def test_notify_contact_publishes_and_rate_limits(table) -> None:
+    _put(table, _incident("inc_rfw", "Red Flag Warning", "high", ends_in=timedelta(days=2)))
+    async with connect() as client:
+        results = [
+            await client.call_tool("notify_contact", {"contact": "roommate"}) for _ in range(4)
+        ]
+    assert [r.is_error for r in results] == [False, False, False, True]
+    assert _events(table, "inc_rfw") == ["notified"] * 3
+    rate = table.query(
+        KeyConditionExpression="PK = :p", ExpressionAttributeValues={":p": "RATE#hh_demo#c_priya"}
+    )["Items"]
+    assert len(rate) == 1 and rate[0]["count"] == 3 and rate[0]["expires_at"]
+
+
+async def test_escalate_sets_status_and_publishes(table) -> None:
+    _put(table, _incident("inc_rfw", "Red Flag Warning", "high", ends_in=timedelta(days=2)))
+    async with connect() as client:
+        result = await client.call_tool("escalate", {})
+    assert result.structured_content is not None
+    assert result.structured_content["escalated_to"] == "Priya (roommate)"
+    item = table.get_item(Key={"PK": "INC#inc_rfw", "SK": "META"})["Item"]
+    assert item["status"] == "escalated"
+    assert _events(table, "inc_rfw") == ["escalated"]
+
+
+async def test_sns_failure_is_a_clear_tool_error(table, monkeypatch) -> None:
+    _put(table, _incident("inc_rfw", "Red Flag Warning", "high", ends_in=timedelta(days=2)))
+    monkeypatch.setenv("NOTIFY_TOPIC_ARN", "arn:aws:sns:us-west-2:123456789012:does-not-exist")
+    async with connect() as client:
+        result = await client.call_tool("notify_contact", {"contact": "Priya"})
+    assert result.is_error and result.content[0].type == "text"
+    assert result.content[0].text == (
+        "I couldn't reach the notification service, so Priya wasn't notified. "
+        "Please try again in a minute."
+    )
+    assert _events(table, "inc_rfw") == []
+
+
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [
+        ("acknowledge", {}),
+        ("notify_contact", {"contact": "roommate"}),
+        ("escalate", {}),
+    ],
+)
+async def test_action_handlers_under_50ms(table, tool, args) -> None:
+    _put(table, _incident("inc_rfw", "Red Flag Warning", "high", ends_in=timedelta(days=2)))
+    async with connect() as client:
+        await client.call_tool("get_active_incidents", {})  # warm caches
+        start = time.perf_counter()
+        result = await client.call_tool(tool, args)
+        elapsed = (time.perf_counter() - start) * 1000
+    assert not result.is_error and elapsed < 50, elapsed

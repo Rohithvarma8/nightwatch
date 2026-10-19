@@ -19,6 +19,19 @@ def event_sk(at: str, event_id: str) -> str:
     return f"EVT#{at}#{event_id}"
 
 
+def contact_sk(contact_id: str) -> str:
+    return f"CONTACT#{contact_id}"
+
+
+CONTACT_PREFIX = "CONTACT#"
+ESCALATION_POLICY = "POLICY#escalation"
+
+
+def rate_pk(household_id: str, contact_id: str) -> str:
+    """Notification rate-limit counter (one item per contact per clock hour)."""
+    return f"RATE#{household_id}#{contact_id}"
+
+
 def signal_pk(source: str, external_id: str) -> str:
     return f"SIG#{source}#{external_id}"
 

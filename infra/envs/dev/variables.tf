@@ -27,3 +27,21 @@ variable "triage_fallback_model_id" {
   type        = string
   default     = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
+
+variable "ntfy_topic" {
+  description = "ntfy.sh topic for push notifications (unguessable; anyone who knows it can read it). terraform.tfvars only."
+  type        = string
+  sensitive   = true
+}
+
+variable "contact_email" {
+  description = "Demo contact Priya's email (seeded by make seed-household). terraform.tfvars only."
+  type        = string
+  sensitive   = true
+}
+
+variable "ses_sender_email" {
+  description = "SES sender identity (verified). terraform.tfvars only."
+  type        = string
+  sensitive   = true
+}

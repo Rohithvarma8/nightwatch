@@ -467,7 +467,7 @@ dev = [
     { name = "anyio", specifier = ">=4" },
     { name = "boto3", specifier = ">=1.35" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "moto", extras = ["dynamodb"], specifier = ">=5" },
+    { name = "moto", extras = ["dynamodb", "sns"], specifier = ">=5" },
     { name = "pyright", specifier = ">=1.1.380" },
     { name = "pytest", specifier = ">=8" },
     { name = "ruff", specifier = ">=0.6" },

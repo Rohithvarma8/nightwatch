@@ -1,2 +1,5 @@
 # Copy to terraform.tfvars (gitignored) and fill in.
 nws_user_agent = "(your-app-name, you@example.com)"
+ntfy_topic       = "nightwatch-<random string>"  # subscribe to this topic in the ntfy app
+contact_email    = "you@example.com"
+ses_sender_email = "you@example.com"

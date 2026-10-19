@@ -47,8 +47,9 @@ warm-off: build  ## OPTIONAL: provisioned concurrency = 0 (back to on-demand, no
 	terraform -chdir=$(TF_DEV) init -input=false
 	terraform -chdir=$(TF_DEV) apply
 
-seed-household:  ## Write the demo household (Simi Valley, CAZ374) to the deployed table
-	cd pipeline && $(AWS_ENV) uv run python -m nightwatch_pipeline.seed --table $$($(TF_OUT) table_name)
+seed-household:  ## Write the demo household (Simi Valley, CAZ374), contact Priya, and escalation policy
+	cd pipeline && $(AWS_ENV) uv run python -m nightwatch_pipeline.seed --table $$($(TF_OUT) table_name) \
+		--contact-email "$$($(TF_OUT) contact_email)"
 
 replay:  ## Replay one archived NWS alert through the bus: make replay FILE=~/nightwatch-alert-archive/archive/nws/<day>/<id>.json
 	@test -n "$(FILE)" || (echo "usage: make replay FILE=<alert.json>"; exit 1)
@@ -59,5 +60,5 @@ reset-incidents:  ## DEV ONLY: delete incidents, OPENKEYs, and signal records (k
 	@test "$(CONFIRM)" = "yes" || (echo "usage: make reset-incidents CONFIRM=yes"; exit 1)
 	cd pipeline && $(AWS_ENV) uv run python -m nightwatch_pipeline.cutover --table $$($(TF_OUT) table_name) --confirm
 
-smoke:  ## Post-deploy smoke test: replay one alert end to end, fail on any Lambda error (moto doesn't enforce IAM)
+smoke:  ## Post-deploy smoke test: replay one alert end to end; fail on any builder/triage/notifier/escalation Lambda error
 	$(AWS_ENV) scripts/smoke.sh $(FILE)

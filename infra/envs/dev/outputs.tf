@@ -17,3 +17,14 @@ output "bus_name" {
   description = "EventBridge bus (used by make replay)."
   value       = module.ingest.bus_name
 }
+
+output "contact_email" {
+  description = "Demo contact email for make seed-household."
+  value       = var.contact_email
+  sensitive   = true
+}
+
+output "notify_topic_arn" {
+  description = "SNS notification topic."
+  value       = module.notify.topic_arn
+}

@@ -485,5 +485,264 @@
       "type": "object"
     },
     "title": "Runbook for an incident"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+      "title": "Acknowledge an incident"
+    },
+    "description": "Use when the user says they've seen it, got it, are on it, or wants to stop the escalation ('okay, I've got it', 'acknowledge the fire one'). Marks the incident acknowledged, which cancels the pending escalation to their contact. Safe to repeat. Defaults to the top-ranked active incident; pass `reference` with the user's words to pick another.",
+    "inputSchema": {
+      "properties": {
+        "incident_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exact incident id from a previous result, if known.",
+          "title": "Incident Id"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How the user referred to the incident, e.g. 'the fire one'.",
+          "title": "Reference"
+        }
+      },
+      "title": "acknowledgeArguments",
+      "type": "object"
+    },
+    "name": "acknowledge",
+    "outputSchema": {
+      "properties": {
+        "acked_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Acked At"
+        },
+        "escalation_cancelled": {
+          "title": "Escalation Cancelled",
+          "type": "boolean"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "acked_at",
+        "escalation_cancelled"
+      ],
+      "title": "AckResult",
+      "type": "object"
+    },
+    "title": "Acknowledge an incident"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Notify a contact"
+    },
+    "description": "Use when the user asks to tell, text, message, or alert a person about an incident ('text my roommate', 'let Priya know about the fire one'). `contact` is the person's name or how the user refers to them (e.g. 'roommate'). Sends a fixed message built from the incident (what, where, until when, what to do) by push and email. Limited to 3 messages per contact per hour.",
+    "inputSchema": {
+      "properties": {
+        "contact": {
+          "description": "Name or relationship, e.g. 'Priya' or 'roommate'.",
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Contact",
+          "type": "string"
+        },
+        "incident_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exact incident id from a previous result, if known.",
+          "title": "Incident Id"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How the user referred to the incident, e.g. 'the fire one'.",
+          "title": "Reference"
+        }
+      },
+      "required": [
+        "contact"
+      ],
+      "title": "notify_contactArguments",
+      "type": "object"
+    },
+    "name": "notify_contact",
+    "outputSchema": {
+      "properties": {
+        "channels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Channels",
+          "type": "array"
+        },
+        "contact": {
+          "title": "Contact",
+          "type": "string"
+        },
+        "message_preview": {
+          "title": "Message Preview",
+          "type": "string"
+        },
+        "queued": {
+          "title": "Queued",
+          "type": "boolean"
+        },
+        "relationship": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Relationship"
+        }
+      },
+      "required": [
+        "queued",
+        "contact",
+        "relationship",
+        "channels",
+        "message_preview"
+      ],
+      "title": "NotifyResult",
+      "type": "object"
+    },
+    "title": "Notify a contact"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Escalate an incident"
+    },
+    "description": "Use when the user asks to escalate or to get help now ('escalate this', 'get my roommate involved'). Marks the incident escalated and immediately notifies the first contact in the household's escalation policy by push and email.",
+    "inputSchema": {
+      "properties": {
+        "incident_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exact incident id from a previous result, if known.",
+          "title": "Incident Id"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How the user referred to the incident, e.g. 'the fire one'.",
+          "title": "Reference"
+        }
+      },
+      "title": "escalateArguments",
+      "type": "object"
+    },
+    "name": "escalate",
+    "outputSchema": {
+      "properties": {
+        "channels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Channels",
+          "type": "array"
+        },
+        "escalated_to": {
+          "title": "Escalated To",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "escalated_to",
+        "channels",
+        "status"
+      ],
+      "title": "EscalateResult",
+      "type": "object"
+    },
+    "title": "Escalate an incident"
   }
 ]

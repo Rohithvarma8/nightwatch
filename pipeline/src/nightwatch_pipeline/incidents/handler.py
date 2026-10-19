@@ -17,6 +17,7 @@ from nightwatch_core.models import Household, Incident, Signal
 from nightwatch_core.timefmt import parse_utc, to_utc_iso
 from nightwatch_pipeline import settings as settings_mod
 from nightwatch_pipeline.bus import Bus
+from nightwatch_pipeline.escalation.schedule import EscalationScheduler, due_at, needs_escalation
 from nightwatch_pipeline.store import Store
 from nightwatch_pipeline.triage import rules, templates
 
@@ -48,7 +49,9 @@ def _bumped(incident: Incident, prev: Incident) -> Incident:
     return incident.model_copy(update={"version": prev.version + 1})
 
 
-def process_signal(store: Store, signal: Signal, now: datetime) -> tuple[str, list[Incident]]:
+def process_signal(
+    store: Store, signal: Signal, now: datetime, scheduler: EscalationScheduler | None = None
+) -> tuple[str, list[Incident]]:
     """Returns (outcome, incidents whose content changed)."""
     household = store.get_household(signal.household_id)
     if household is None:
@@ -65,6 +68,15 @@ def process_signal(store: Store, signal: Signal, now: datetime) -> tuple[str, li
         if signal.message_type == "Cancel" or parse_utc(signal.ends_at) <= now:
             return "noop", []
         created = _new_incident(signal, household, now)
+        if scheduler is not None and needs_escalation(created, store.get_policy(household.id)):
+            # Schedule first: if the incident write then loses a race, the orphan timer no-ops.
+            at = due_at(created, household, now)
+            created = created.model_copy(
+                update={
+                    "escalation_schedule_name": scheduler.create(created, at),
+                    "escalation_due_at": to_utc_iso(at),
+                }
+            )
         store.create_incident(created, "signal_added", now)
         outcome, changed = "created", [created]
     elif any(r.external_id == signal.external_id for r in target.signals):
@@ -144,19 +156,25 @@ def sweep(store: Store, household_ids: list[str], now: datetime) -> tuple[int, l
 
 
 @cache
-def _deps() -> tuple[settings_mod.Settings, Store, Bus]:
+def _deps() -> tuple[settings_mod.Settings, Store, Bus, EscalationScheduler | None]:
     cfg = settings_mod.load()
-    return cfg, Store(cfg.table_name), Bus(cfg.bus_name)
+    scheduler = (
+        EscalationScheduler(cfg.escalation_target_arn, cfg.escalation_role_arn)
+        if cfg.escalation_target_arn
+        else None
+    )
+    return cfg, Store(cfg.table_name), Bus(cfg.bus_name), scheduler
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
-    cfg, store, bus = _deps()
+    cfg, store, bus, scheduler = _deps()
     now = datetime.now(UTC)
     if event.get("action") == "sweep":
         resolved, changed = sweep(store, cfg.household_ids, now)
         result: dict[str, Any] = {"resolved": resolved}
     else:
-        outcome, changed = process_signal(store, Signal.model_validate(event["detail"]), now)
+        signal = Signal.model_validate(event["detail"])
+        outcome, changed = process_signal(store, signal, now, scheduler)
         result = {"outcome": outcome}
     open_changed = [i for i in changed if i.status != "resolved"]
     bus.publish_incident_changed(open_changed)

@@ -464,6 +464,9 @@ dynamodb = [
 events = [
     { name = "jsonpath-ng" },
 ]
+ssm = [
+    { name = "pyyaml" },
+]
 
 [[package]]
 name = "nightwatch-core"
@@ -500,7 +503,7 @@ triage = [
 [package.dev-dependencies]
 dev = [
     { name = "boto3" },
-    { name = "moto", extra = ["dynamodb", "events"] },
+    { name = "moto", extra = ["dynamodb", "events", "ssm"] },
     { name = "pyright" },
     { name = "pytest" },
     { name = "ruff" },
@@ -517,7 +520,7 @@ provides-extras = ["triage"]
 [package.metadata.requires-dev]
 dev = [
     { name = "boto3", specifier = ">=1.35" },
-    { name = "moto", extras = ["dynamodb", "events"], specifier = ">=5" },
+    { name = "moto", extras = ["dynamodb", "events", "scheduler", "sns", "ses", "ssm"], specifier = ">=5" },
     { name = "pyright", specifier = ">=1.1.380" },
     { name = "pytest", specifier = ">=8" },
     { name = "ruff", specifier = ">=0.6" },
