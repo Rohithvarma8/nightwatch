@@ -8,8 +8,6 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.config import Config
 
-from nightwatch.domain.incidents import is_active, to_view
-from nightwatch.domain.models import IncidentView
 from nightwatch_core import keys
 from nightwatch_core.models import Incident
 
@@ -39,11 +37,18 @@ class DynamoIncidentSource:
         self._name = (time.monotonic(), name)
         return name
 
-    def active_incidents(self, now: datetime) -> list[IncidentView]:
+    def active_incidents(self, now: datetime) -> list[Incident]:
         resp = self._table.query(
             IndexName=keys.GSI1,
             KeyConditionExpression=Key("GSI1PK").eq(keys.active_gsi1_pk(self._household_id)),
             Limit=_QUERY_LIMIT,
         )
-        incidents = [Incident.model_validate(i) for i in resp.get("Items", [])]
-        return [to_view(i) for i in incidents if is_active(i, now)]
+        return [Incident.model_validate(i) for i in resp.get("Items", [])]
+
+    def get_incident(self, incident_id: str) -> Incident | None:
+        item = self._table.get_item(Key={"PK": keys.incident_pk(incident_id), "SK": keys.META}).get(
+            "Item"
+        )
+        if not item or item.get("household_id") != self._household_id:
+            return None
+        return Incident.model_validate(item)

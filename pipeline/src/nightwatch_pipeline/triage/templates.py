@@ -1,11 +1,11 @@
-"""Deterministic summaries. Used until the Day 4 triage agent, and as its fallback after.
+"""Deterministic summaries: the default until the triage agent runs, and its fallback after.
 
-Only facts from the signal: event name, place name, and end time. No invented numbers.
+Only facts from the signals: event names, the place name, and end times. No invented numbers.
 """
 
 from datetime import datetime
 
-from nightwatch_core.models import HazardFamily, Household, Signal
+from nightwatch_core.models import HazardFamily, Household, Signal, Summarizer
 from nightwatch_core.timefmt import spoken_until
 
 TEMPLATE_MODEL = "template-v1"
@@ -19,6 +19,11 @@ _EVENT_ACTIONS: dict[str, list[str]] = {
     "High Wind Warning": ["Secure outdoor items and stay away from trees and power lines"],
     "Wind Advisory": ["Secure loose outdoor items"],
 }
+_FIRE_RISK_ACTIONS = [
+    "Avoid anything that could spark a fire",
+    "Secure loose outdoor items",
+    "Be ready to leave quickly if a fire starts nearby",
+]
 _FAMILY_ACTIONS: dict[HazardFamily, list[str]] = {
     "fire_weather": ["Avoid anything that could spark a fire"],
     "wind": ["Secure loose outdoor items"],
@@ -34,18 +39,29 @@ def _article(word: str) -> str:
     return "an" if word[:1].upper() in "AEIOU" else "a"
 
 
-def recommended_actions(signal: Signal) -> list[str]:
-    return _EVENT_ACTIONS.get(signal.event) or _FAMILY_ACTIONS[signal.hazard_family]
+def recommended_actions(primary: Signal, supporting: Signal | None = None) -> list[str]:
+    if supporting is not None:
+        return _FIRE_RISK_ACTIONS
+    return _EVENT_ACTIONS.get(primary.event) or _FAMILY_ACTIONS[primary.hazard_family]
 
 
-def spoken_summary(signal: Signal, household: Household, now: datetime) -> str:
-    until = spoken_until(signal.ends_at, household.tz, now)
+def spoken_summary(
+    primary: Signal, supporting: Signal | None, household: Household, now: datetime
+) -> str:
+    until = spoken_until(primary.ends_at, household.tz, now)
     text = (
-        f"The National Weather Service has {_article(signal.event)} {signal.event} "
-        f"for {signal.area_name} until {until}."
+        f"The National Weather Service has {_article(primary.event)} {primary.event} "
+        f"for {primary.area_name} until {until}"
     )
-    return f"Replay of a real alert. {text}" if signal.replay else text
+    if supporting is not None:
+        also = spoken_until(supporting.ends_at, household.tz, now)
+        text += f", and {_article(supporting.event)} {supporting.event} until {also}"
+    return text + "."
 
 
-def detail_summary(signal: Signal) -> str:
-    return signal.headline
+def detail_summary(primary: Signal, supporting: Signal | None = None) -> str:
+    return primary.headline if supporting is None else f"{primary.headline} {supporting.headline}"
+
+
+def summarizer() -> Summarizer:
+    return Summarizer(model=TEMPLATE_MODEL, latency_ms=0, fallback_used=False)

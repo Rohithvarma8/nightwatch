@@ -17,7 +17,7 @@ from moto import mock_aws
 
 from nightwatch.app import MCP_PATH, create_app
 from nightwatch_core import keys
-from nightwatch_core.models import Evidence, Incident, Summarizer
+from nightwatch_core.models import Evidence, Incident, SignalRef, Summarizer
 
 pytestmark = pytest.mark.anyio
 
@@ -42,6 +42,19 @@ def _incident(iid: str, title: str, severity, *, ends_in: timedelta, replay=Fals
         updated_at=_iso(NOW),
         ends_at=_iso(NOW + ends_in),
         correlation_key=f"hh_demo#{title}#CAZ374",
+        signals=[
+            SignalRef(
+                source="nws",
+                external_id=f"{iid}.1",
+                observed_at=_iso(NOW - timedelta(hours=1)),
+                summary=title,
+                url="https://api.weather.gov/x",
+                event=title,
+                hazard_family="wind" if "Wind" in title else "fire_weather",
+                message_type="Alert",
+                certainty="Likely",
+            )
+        ],
         evidence=[
             Evidence(
                 type="nws_alert",
@@ -136,15 +149,40 @@ async def test_reads_active_incidents_from_gsi1(table) -> None:
     sc = result.structured_content
     assert sc is not None
     assert sc["household"] == "Demo Household"
-    assert [i["id"] for i in sc["incidents"]] == ["inc_rfw", "inc_rp", "inc_wind"]
-    replayed = sc["incidents"][1]
-    assert replayed["replay"] is True and replayed["replay_original_time"] is not None
+    # The replayed red flag warning is hidden: a live fire-weather incident exists.
+    assert [i["id"] for i in sc["incidents"]] == ["inc_rfw", "inc_wind"]
     assert sc["incidents"][0]["top_action"] == "Act on Red Flag Warning"
     assert sc["incidents"][0]["evidence_preview"] == [
         "NWS Red Flag Warning, Southeastern Ventura County Valleys"
     ]
     text = result.content[0]
     assert text.type == "text" and "Heat Advisory" not in text.text and "inc_" not in text.text
+
+
+async def test_replay_shown_when_only_data(table) -> None:
+    _put(
+        table,
+        _incident("inc_rp", "Red Flag Warning", "high", ends_in=timedelta(days=2), replay=True),
+    )
+    async with connect() as client:
+        result = await client.call_tool("get_active_incidents", {})
+    sc = result.structured_content
+    assert sc is not None
+    (only,) = sc["incidents"]
+    assert only["replay"] is True and only["replay_original_time"] is not None
+    assert result.content[0].type == "text"
+    assert result.content[0].text.startswith("One thing. 1. Replayed alert: Red Flag Warning")
+
+
+async def test_explain_and_runbook_read_the_table(table) -> None:
+    _put(table, _incident("inc_rfw", "Red Flag Warning", "high", ends_in=timedelta(days=2)))
+    _put(table, _incident("inc_wind", "Wind Advisory", "moderate", ends_in=timedelta(hours=5)))
+    async with connect() as client:
+        exp = await client.call_tool("explain_incident", {"reference": "the wind thing"})
+        book = await client.call_tool("get_runbook", {"incident_id": "inc_wind"})
+    assert exp.structured_content is not None and exp.structured_content["id"] == "inc_wind"
+    assert book.structured_content is not None
+    assert book.structured_content["runbook_id"] == "wind-advisory"
 
 
 async def test_no_incidents_is_all_clear(table) -> None:
@@ -156,13 +194,22 @@ async def test_no_incidents_is_all_clear(table) -> None:
     assert result.content[0].text == "All clear. No active incidents right now."
 
 
-async def test_tool_handler_under_50ms(table) -> None:
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [
+        ("get_active_incidents", {}),
+        ("explain_incident", {"reference": "the fire one"}),
+        ("get_runbook", {}),
+    ],
+)
+async def test_tool_handler_under_50ms(table, tool, args) -> None:
     _put(table, _incident("inc_rfw", "Red Flag Warning", "high", ends_in=timedelta(days=2)))
     async with connect() as client:
-        await client.call_tool("get_active_incidents", {})  # warm-up (name cache, connections)
+        await client.call_tool(tool, args)  # warm-up (name cache, connections)
         times = []
         for _ in range(5):
             start = time.perf_counter()
-            await client.call_tool("get_active_incidents", {})
+            result = await client.call_tool(tool, args)
             times.append((time.perf_counter() - start) * 1000)
+            assert not result.is_error
     assert sorted(times)[len(times) // 2] < 50, times

@@ -1,5 +1,6 @@
-"""Filtering, ranking, and spoken formatting for active incidents."""
+"""Ranking, replay rules, and spoken formatting for active incidents. Pure (no I/O)."""
 
+import re
 from datetime import datetime
 from typing import Protocol
 
@@ -17,19 +18,76 @@ MAX_LIMIT = 5
 _SCOPE_KIND = {"home": "hazard", "work": "prod"}
 _COUNT_WORDS = ["Nothing", "One thing", "Two things", "Three things", "Four things", "Five things"]
 EVIDENCE_PREVIEW = 2
+REPLAY_PREFIX = "Replayed alert:"
 
 
 class IncidentSource(Protocol):
-    """Where the tool reads active incidents from (DynamoDB in prod, fixture in tests)."""
+    """Where tools read incidents from (DynamoDB in prod, fixture in tests and local runs)."""
 
     def household_name(self) -> str: ...
 
-    def active_incidents(self, now: datetime) -> list[IncidentView]: ...
+    def active_incidents(self, now: datetime) -> list[Incident]: ...
+
+    def get_incident(self, incident_id: str) -> Incident | None: ...
 
 
 def is_active(incident: Incident, now: datetime) -> bool:
     """Still open and its alert hasn't ended (the sweep may not have run yet)."""
     return incident.status != "resolved" and parse_utc(incident.ends_at) > now
+
+
+def rank(incidents: list[Incident]) -> list[Incident]:
+    """Most severe first, then most recent first."""
+    newest_first = sorted(incidents, key=lambda i: i.started_at, reverse=True)
+    return sorted(newest_first, key=lambda i: SEVERITY_RANK[i.severity])
+
+
+def without_shadowed_replays(incidents: list[Incident]) -> list[Incident]:
+    """Drop replays when a live incident of the same hazard family exists.
+
+    Replays only appear when they're the only data for their hazard (and stay labeled).
+    """
+    live_families = set().union(*(i.hazard_families for i in incidents if not i.replay))
+    return [i for i in incidents if not i.replay or not (i.hazard_families & live_families)]
+
+
+def overview(incidents: list[Incident], now: datetime) -> list[Incident]:
+    """The default ranked list Alexa reads: active, live-over-replay, ranked."""
+    return rank(without_shadowed_replays([i for i in incidents if is_active(i, now)]))
+
+
+def candidates(incidents: list[Incident], now: datetime) -> list[Incident]:
+    """Everything active, in overview order, then any shadowed replays (for explicit lookups)."""
+    shown = overview(incidents, now)
+    rest = rank([i for i in incidents if is_active(i, now) and i not in shown])
+    return shown + rest
+
+
+def select_active(
+    incidents: list[Incident], scope: Scope, min_severity: Severity, limit: int
+) -> list[Incident]:
+    """Already-ranked incidents filtered by scope and severity, capped at `limit`."""
+    threshold = SEVERITY_RANK[min_severity]
+    kept = [
+        i
+        for i in incidents
+        if SEVERITY_RANK[i.severity] <= threshold
+        and (scope == "all" or i.kind == _SCOPE_KIND[scope])
+    ]
+    return kept[: max(1, min(limit, MAX_LIMIT))]
+
+
+def sentence(text: str) -> str:
+    """Exactly one sentence ending: 'Avoid sparks' / 'Avoid sparks.' / 'Avoid sparks..' → 'Avoid
+    sparks.' (AI text often ends with a period; templates don't)."""
+    text = re.sub(r"[\s.;:,]+$", "", text.strip())
+    if not text:
+        return ""
+    return text if text[-1] in "!?" else f"{text}."
+
+
+def spoken_title(incident: Incident | IncidentView) -> str:
+    return f"{REPLAY_PREFIX} {incident.title}" if incident.replay else incident.title
 
 
 def to_view(incident: Incident) -> IncidentView:
@@ -49,22 +107,6 @@ def to_view(incident: Incident) -> IncidentView:
     )
 
 
-def select_active(
-    incidents: list[IncidentView], scope: Scope, min_severity: Severity, limit: int
-) -> list[IncidentView]:
-    """Open-ish incidents in scope at or above min_severity, most severe first."""
-    threshold = SEVERITY_RANK[min_severity]
-    kept = [
-        i
-        for i in incidents
-        if i.status != "resolved"
-        and SEVERITY_RANK[i.severity] <= threshold
-        and (scope == "all" or i.kind == _SCOPE_KIND[scope])
-    ]
-    kept.sort(key=lambda i: (SEVERITY_RANK[i.severity], i.started_at))
-    return kept[: max(1, min(limit, MAX_LIMIT))]
-
-
 def spoken_overview(incidents: list[IncidentView]) -> str:
     """Short text Alexa can speak from. Never includes IDs."""
     if not incidents:
@@ -72,16 +114,20 @@ def spoken_overview(incidents: list[IncidentView]) -> str:
     lead = _COUNT_WORDS[len(incidents)] if len(incidents) < len(_COUNT_WORDS) else "Several things"
     parts = [f"{lead}."]
     for n, inc in enumerate(incidents, start=1):
-        parts.append(f"{n}. {inc.title}, {inc.severity}: {inc.spoken_summary} {inc.top_action}.")
+        line = f"{n}. {spoken_title(inc)}, {inc.severity}: {sentence(inc.spoken_summary)}"
+        if inc.top_action:
+            line += f" {sentence(inc.top_action)}"
+        parts.append(line)
     return " ".join(parts)
 
 
 def build_active_incidents(
-    incidents: list[IncidentView], household: str, as_of: str
+    incidents: list[Incident], household: str, as_of: str
 ) -> ActiveIncidents:
+    views = [to_view(i) for i in incidents]
     return ActiveIncidents(
         as_of=as_of,
         household=household,
-        spoken_overview=spoken_overview(incidents),
-        incidents=incidents,
+        spoken_overview=spoken_overview(views),
+        incidents=views,
     )

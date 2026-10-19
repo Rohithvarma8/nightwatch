@@ -1,0 +1,14 @@
+title: Fire risk (red flag + wind)
+match:
+  titles: ["Fire risk"]
+steps:
+  - action: Avoid anything that could spark a fire, like mowing, grilling, or parking on dry grass
+    why: Dry air and strong wind let any spark grow into a fast-moving fire.
+  - action: Bring in or tie down loose outdoor items and cushions
+    why: Wind turns loose items into hazards and can carry embers to anything flammable.
+  - action: Keep phones charged and car keys, shoes, and medicines by the door
+    why: If a fire starts nearby, you may have minutes to leave.
+  - action: Know two ways out of the neighborhood
+    why: The usual road can close quickly during a wind-driven fire.
+  - action: Turn on local emergency alerts and check them before bed
+    why: Evacuation orders come from local officials, not the weather service.

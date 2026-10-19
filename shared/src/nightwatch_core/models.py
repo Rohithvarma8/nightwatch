@@ -44,6 +44,8 @@ class Signal(BaseModel):
     area: str  # household zone the alert matched (correlation key part)
     area_name: str  # place name as it appears in the source
     headline: str
+    description: str = ""  # full source text: the triage agent's only input, and grounding source
+    instruction: str = ""
     sender_name: str
     message_type: Literal["Alert", "Update", "Cancel"]
     sent_at: str
@@ -62,9 +64,15 @@ class Signal(BaseModel):
 class SignalRef(BaseModel):
     source: Source
     external_id: str
-    observed_at: str
+    observed_at: str  # when the source issued it
     summary: str
     url: str
+    event: str | None = None
+    hazard_family: HazardFamily | None = None
+    message_type: str | None = None
+    certainty: str | None = None
+    ends_at: str | None = None
+    role: Literal["primary", "supporting"] = "primary"
 
 
 class Evidence(BaseModel):
@@ -78,6 +86,9 @@ class Summarizer(BaseModel):
     model: str
     latency_ms: int
     fallback_used: bool
+    grounding_passed: bool | None = None  # None = template (nothing to check)
+    content_hash: str | None = None  # incident content this summary was written for
+    template_fields: list[str] = Field(default_factory=list)  # AI fields rejected (e.g. a URL)
 
 
 class Incident(BaseModel):
@@ -92,6 +103,9 @@ class Incident(BaseModel):
     ends_at: str  # incident stops being active after this (alert `ends`, else `expires`)
     resolved_at: str | None = None
     correlation_key: str
+    related_keys: list[str] = Field(default_factory=list)  # other OPENKEYs that point here
+    merged_into: str | None = None  # set when resolved by merging into another incident
+    content_hash: str = ""  # changes when the incident's facts change → re-summarize
     signals: list[SignalRef] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
     spoken_summary: str
@@ -109,3 +123,13 @@ class Incident(BaseModel):
     @property
     def top_action(self) -> str:
         return self.recommended_actions[0] if self.recommended_actions else ""
+
+    @property
+    def keys(self) -> list[str]:
+        return [self.correlation_key, *self.related_keys]
+
+    @property
+    def hazard_families(self) -> set[str]:
+        if self.kind == "prod":
+            return {"prod"}
+        return {r.hazard_family for r in self.signals if r.hazard_family} or {"other"}

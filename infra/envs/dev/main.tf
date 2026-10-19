@@ -21,3 +21,14 @@ module "mcp_server" {
   table_arn               = module.data.table_arn
   household_id            = var.household_ids[0]
 }
+
+module "triage" {
+  source = "../../modules/triage"
+
+  zip_path          = "${path.root}/../../../dist/triage.zip"
+  table_name        = module.data.table_name
+  table_arn         = module.data.table_arn
+  bus_name          = module.ingest.bus_name
+  model_id          = var.triage_model_id
+  fallback_model_id = var.triage_fallback_model_id
+}

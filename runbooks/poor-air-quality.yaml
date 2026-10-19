@@ -1,0 +1,12 @@
+title: Poor air quality
+match:
+  families: ["air"]
+steps:
+  - action: Keep windows and doors closed
+    why: Keeps outdoor smoke and particles out.
+  - action: Run an air purifier or set the AC to recirculate
+    why: Filters fine particles from indoor air.
+  - action: Limit time and exercise outside
+    why: Heavy breathing pulls more particles into the lungs.
+  - action: Keep medications handy for anyone with asthma or heart conditions
+    why: They are most affected by poor air.

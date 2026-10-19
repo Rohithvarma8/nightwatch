@@ -8,6 +8,7 @@ dependencies = [
     "mcp==2.3.0",
     "uvicorn>=0.30",
     "nightwatch-core",
+    "pyyaml>=6",
 ]
 
 [tool.uv.sources]
@@ -23,6 +24,7 @@ dev = [
     # boto3 ships in the Lambda python3.12 runtime; bundled only for local runs and tests.
     "boto3>=1.35",
     "moto[dynamodb]>=5",
+    "types-pyyaml>=6",
 ]
 
 [build-system]

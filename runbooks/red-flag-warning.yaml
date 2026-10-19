@@ -1,0 +1,13 @@
+title: Red Flag Warning
+match:
+  events: ["Red Flag Warning", "Fire Weather Watch"]
+  families: ["fire_weather"]
+steps:
+  - action: Avoid anything that could spark a fire, like mowing, grilling, or parking on dry grass
+    why: Fire weather means a small spark can spread quickly.
+  - action: Keep phones charged and car keys, shoes, and medicines by the door
+    why: If a fire starts nearby, you may need to leave quickly.
+  - action: Know two ways out of the neighborhood
+    why: The usual road can close during a fire.
+  - action: Turn on local emergency alerts
+    why: Evacuation orders come from local officials.
