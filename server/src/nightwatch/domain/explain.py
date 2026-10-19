@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from nightwatch.domain.incidents import spoken_title
+from nightwatch.domain.incidents import sentence, spoken_title
 from nightwatch_core.models import Incident
 
 Depth = Literal["brief", "full"]
@@ -99,7 +99,7 @@ def explain(incident: Incident, depth: Depth) -> Explanation:
         evidence, events = evidence[:BRIEF_EVIDENCE], events[-BRIEF_TIMELINE:]
     meaning = _MEANING[_meaning_key(incident)]
     if incident.top_action:
-        meaning = f"{meaning} {incident.top_action}."
+        meaning = f"{meaning} {sentence(incident.top_action)}"
     return Explanation(
         id=incident.id,
         title=incident.title,
@@ -117,7 +117,10 @@ def explain(incident: Incident, depth: Depth) -> Explanation:
 def spoken_explanation(incident: Incident, exp: Explanation) -> str:
     """Spoken answer to "why?": the summary, what it means, and the evidence. No IDs."""
     because = "; ".join(e.detail for e in exp.evidence[:BRIEF_EVIDENCE])
-    parts = [f"{spoken_title(incident)}. {incident.spoken_summary}", exp.what_it_means_for_you]
+    parts = [
+        f"{spoken_title(incident)}. {sentence(incident.spoken_summary)}",
+        exp.what_it_means_for_you,
+    ]
     if because:
         parts.append(f"Based on: {because}.")
     parts.append(f"Confidence is {exp.confidence}.")

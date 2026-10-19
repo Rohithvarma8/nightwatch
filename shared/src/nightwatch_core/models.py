@@ -88,6 +88,7 @@ class Summarizer(BaseModel):
     fallback_used: bool
     grounding_passed: bool | None = None  # None = template (nothing to check)
     content_hash: str | None = None  # incident content this summary was written for
+    template_fields: list[str] = Field(default_factory=list)  # AI fields rejected (e.g. a URL)
 
 
 class Incident(BaseModel):

@@ -88,3 +88,15 @@ def test_all_runbooks_load_with_why() -> None:
         "deploy-regression",
     }  # fmt: skip
     assert all(s.action and s.why for b in books.values() for s in b.steps)
+
+
+def test_explain_and_runbook_text_have_no_doubled_periods() -> None:
+    from nightwatch.tools.runbooks import _spoken, _view
+
+    ai = FIRE.model_copy(update={"recommended_actions": ["Avoid activities that can spark fires."]})
+    exp = explain(ai, "brief")
+    assert ".." not in exp.what_it_means_for_you and ".." not in spoken_explanation(ai, exp)
+    book = runbook_for(ai, load_runbooks())
+    assert book is not None
+    text = _spoken(_view(book, ai.id, ai.title), "fire risk")
+    assert ".." not in text and text.startswith("For the fire risk: first, avoid anything")

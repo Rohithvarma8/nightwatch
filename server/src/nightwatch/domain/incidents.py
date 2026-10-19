@@ -1,5 +1,6 @@
 """Ranking, replay rules, and spoken formatting for active incidents. Pure (no I/O)."""
 
+import re
 from datetime import datetime
 from typing import Protocol
 
@@ -76,6 +77,15 @@ def select_active(
     return kept[: max(1, min(limit, MAX_LIMIT))]
 
 
+def sentence(text: str) -> str:
+    """Exactly one sentence ending: 'Avoid sparks' / 'Avoid sparks.' / 'Avoid sparks..' → 'Avoid
+    sparks.' (AI text often ends with a period; templates don't)."""
+    text = re.sub(r"[\s.;:,]+$", "", text.strip())
+    if not text:
+        return ""
+    return text if text[-1] in "!?" else f"{text}."
+
+
 def spoken_title(incident: Incident | IncidentView) -> str:
     return f"{REPLAY_PREFIX} {incident.title}" if incident.replay else incident.title
 
@@ -104,8 +114,10 @@ def spoken_overview(incidents: list[IncidentView]) -> str:
     lead = _COUNT_WORDS[len(incidents)] if len(incidents) < len(_COUNT_WORDS) else "Several things"
     parts = [f"{lead}."]
     for n, inc in enumerate(incidents, start=1):
-        action = f" {inc.top_action}." if inc.top_action else ""
-        parts.append(f"{n}. {spoken_title(inc)}, {inc.severity}: {inc.spoken_summary}{action}")
+        line = f"{n}. {spoken_title(inc)}, {inc.severity}: {sentence(inc.spoken_summary)}"
+        if inc.top_action:
+            line += f" {sentence(inc.top_action)}"
+        parts.append(line)
     return " ".join(parts)
 
 

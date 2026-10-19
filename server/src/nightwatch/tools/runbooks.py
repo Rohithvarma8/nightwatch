@@ -7,7 +7,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp_types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
 
-from nightwatch.domain.incidents import IncidentSource, spoken_title
+from nightwatch.domain.incidents import IncidentSource, sentence, spoken_title
 from nightwatch.domain.runbooks import Runbook, runbook_for
 from nightwatch.tools.common import error, resolve_incident
 
@@ -50,10 +50,15 @@ def _view(book: Runbook, incident_id: str, incident_title: str) -> RunbookView:
     )
 
 
+def _mid_sentence(action: str) -> str:
+    """'Avoid sparks.' → 'avoid sparks.' (lowercase only the first letter: keep 'Santa Ana')."""
+    return sentence(action[:1].lower() + action[1:])
+
+
 def _spoken(view: RunbookView, heading: str) -> str:
-    text = f"For the {heading}: first, {view.steps[0].action.lower()}."
+    text = f"For the {heading}: first, {_mid_sentence(view.steps[0].action)}"
     if len(view.steps) > 1:
-        text += f" Then, {view.steps[1].action.lower()}."
+        text += f" Then, {_mid_sentence(view.steps[1].action)}"
     return text + f" That's {len(view.steps)} steps in all."
 
 

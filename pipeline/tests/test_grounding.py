@@ -45,3 +45,55 @@ def test_invented_facts_are_rejected(text: str, violation: str) -> None:
     result = check([text], SOURCE)
     assert not result.passed
     assert any(violation in v for v in result.violations), result.violations
+
+
+# --- replay strict mode -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "violation"),
+    [
+        ("Fire danger stays high until Saturday evening.", "replay timing 'saturday'"),
+        ("The warning runs through October 17.", "replay timing 'october'"),
+        ("Strong winds are expected tonight.", "replay timing 'tonight'"),
+        ("Gusts ease this afternoon.", "replay timing 'afternoon'"),
+        ("The warning ends at 8 PM.", "replay clock time '8 PM'"),
+        ("The warning ends at 8:00PM PDT.", "replay clock time '8:00PM'"),
+        ("Issued 10/15 by the weather service.", "replay date '10/15'"),
+    ],
+)
+def test_strict_mode_rejects_any_timing(text: str, violation: str) -> None:
+    result = check([text], SOURCE, strict=True)
+    assert not result.passed
+    assert any(violation in v for v in result.violations), result.violations
+
+
+def test_strict_mode_allows_timeless_text() -> None:
+    text = "Strong Santa Ana winds and very dry air mean any spark could start a fast fire."
+    assert check([text], SOURCE, strict=True).passed
+
+
+def test_strict_off_keeps_grounded_days() -> None:
+    assert check(["Fire danger stays high through Saturday."], SOURCE).passed
+
+
+# --- URLs / domains -----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("See readyforwildfire.org for tips.", True),
+        ("Visit https://weather.gov now.", True),
+        ("Check www.example.com", True),
+        ("Go to wildfirerisk.org/plan", True),
+        ("Keep windows closed.", False),
+        ("Humidity near 8.5 percent.", False),
+        ("Leave by 8 p.m. if told to.", False),
+        ("Follow U.S. Forest Service guidance.", False),
+    ],
+)
+def test_has_url(text: str, expected: bool) -> None:
+    from nightwatch_pipeline.triage.grounding import has_url
+
+    assert has_url(text) is expected

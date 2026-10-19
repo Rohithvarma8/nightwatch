@@ -36,6 +36,31 @@ _CAPITALIZED_RUN = re.compile(r"[A-Z][a-zA-Z.'-]*(?:\s+[A-Z][a-zA-Z.'-]*)*")
 _SENTENCE_START = re.compile(r"(?:^|[.!?:;]\s+|\n)$")
 
 
+# Replay strict mode: replayed alerts keep their original prose ("through Saturday") while their
+# timestamps are shifted, so replay summaries may not state any timing at all.
+_REPLAY_TIME_WORDS = _TIME_WORDS | {"morning", "afternoon", "evening", "overnight", "weekend"}
+_CLOCK = re.compile(
+    r"\b\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)(?![a-z])|\b\d{1,2}:\d{2}\b", re.I
+)
+_NUMERIC_DATE = re.compile(r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b")
+_URL = re.compile(r"https?://|www\.|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b", re.I)
+
+
+def has_url(text: str) -> bool:
+    """URLs or bare domains ("readyforwildfire.org"). Spoken text must never contain them."""
+    return bool(_URL.search(text))
+
+
+def _timing_violations(text: str) -> list[str]:
+    found = [
+        f"replay timing {w!r}"
+        for w in sorted(set(re.findall(r"[a-z]+", text.lower())) & _REPLAY_TIME_WORDS)
+    ]
+    found += [f"replay clock time {m.group(0).rstrip('.')!r}" for m in _CLOCK.finditer(text)]
+    found += [f"replay date {m.group(0)!r}" for m in _NUMERIC_DATE.finditer(text)]
+    return found
+
+
 @dataclass(frozen=True)
 class GroundingResult:
     passed: bool
@@ -100,7 +125,9 @@ def _grounded_name(name: str, source: str, source_words: set[str]) -> bool:
     )
 
 
-def check(output_texts: list[str], source_text: str) -> GroundingResult:
+def check(output_texts: list[str], source_text: str, *, strict: bool = False) -> GroundingResult:
+    """`strict` (replays): additionally reject any weekday, month, date, relative-day word, or
+    clock time, even if it appears in the source."""
     source = _norm(source_text)
     source_nums = _source_numbers(source_text)
     source_words = set(re.findall(r"[a-z]+", source))
@@ -115,4 +142,6 @@ def check(output_texts: list[str], source_text: str) -> GroundingResult:
         for options in _place_candidates(text):
             if not any(_grounded_name(o, source, source_words) for o in options):
                 violations.append(f"name {options[0]!r} not in source")
+        if strict:
+            violations += _timing_violations(text)
     return GroundingResult(passed=not violations, violations=violations)

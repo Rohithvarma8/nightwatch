@@ -98,3 +98,103 @@ def test_budget_stops_further_attempts() -> None:
     result = agent.summarize([], [], [NOVA, HAIKU], invoke=invoke, clock=lambda: next(ticks))
     assert invoke.calls == [NOVA] and result.fallback_used
     assert result.attempts[-1] == {"model": HAIKU, "error": "budget exhausted"}
+
+
+# --- URLs ---------------------------------------------------------------------------------
+
+WITH_URL_ACTION = GOOD | {
+    "recommended_actions": ["Avoid anything that could spark a fire", "See readyforwildfire.org"]
+}
+
+
+def test_action_with_url_is_dropped_others_kept(store) -> None:
+    inc = _incident(store)
+    run(store, inc.id, inc.content_hash, [NOVA], fake_invoke({NOVA: WITH_URL_ACTION}))
+    saved = store.get_incident(inc.id)
+    assert saved.recommended_actions == ["Avoid anything that could spark a fire"]
+    assert saved.spoken_summary == GOOD["spoken_summary"]
+    assert saved.summarizer.template_fields == []
+
+
+def test_all_actions_with_urls_keep_template_actions(store) -> None:
+    inc = _incident(store)
+    reply = GOOD | {"recommended_actions": ["See readyforwildfire.org", "Visit wildfirerisk.org"]}
+    run(store, inc.id, inc.content_hash, [NOVA], fake_invoke({NOVA: reply}))
+    saved = store.get_incident(inc.id)
+    assert saved.recommended_actions == inc.recommended_actions  # template kept
+    assert saved.spoken_summary == GOOD["spoken_summary"]  # AI field still used
+    assert saved.summarizer.template_fields == ["recommended_actions"]
+
+
+def test_summary_with_url_keeps_template_for_that_field(store) -> None:
+    inc = _incident(store)
+    reply = GOOD | {"spoken_summary": "Fire danger is high. See readyforwildfire.org."}
+    run(store, inc.id, inc.content_hash, [NOVA], fake_invoke({NOVA: reply}))
+    saved = store.get_incident(inc.id)
+    assert saved.spoken_summary == inc.spoken_summary  # template
+    assert saved.detail_summary == GOOD["detail_summary"]  # AI
+    assert saved.summarizer.template_fields == ["spoken_summary"]
+    assert saved.summarizer.fallback_used is False
+
+
+# --- replay strict mode -------------------------------------------------------------------
+
+TIMELESS = GOOD | {
+    "spoken_summary": "Strong Santa Ana winds and very dry air make any spark dangerous.",
+    "detail_summary": "Strong Santa Ana winds and low humidity mean any new fire could grow fast.",
+}
+
+
+def _replay_incident(store, bus):
+    from pathlib import Path
+
+    from nightwatch_pipeline.replay import replay
+
+    from .conftest import FIXTURES
+
+    replay(Path(FIXTURES / "red_flag_warning_update.json"), store, bus, "hh_demo", NOW)
+    (sig,) = bus.published
+    process_signal(store, sig, NOW)
+    (inc,) = store.list_active("hh_demo")
+    assert inc.replay
+    return inc
+
+
+def test_replay_appends_shifted_until_time(store, bus) -> None:
+    from nightwatch_core.timefmt import spoken_until
+
+    inc = _replay_incident(store, bus)
+    seen: dict[str, str] = {}
+
+    def invoke(model_id, system, prompt, timeout_s):
+        seen["system"] = system
+        return json.dumps(TIMELESS)
+
+    assert run(store, inc.id, inc.content_hash, [NOVA], invoke)["outcome"] == "summarized"
+    assert "REPLAY MODE" in seen["system"]
+    saved = store.get_incident(inc.id)
+    until = spoken_until(inc.ends_at, "America/Los_Angeles", NOW)
+    assert saved.spoken_summary == f"{TIMELESS['spoken_summary']} In effect until {until}."
+    assert len(saved.spoken_summary.split()) <= 40
+
+
+def test_replay_output_with_days_is_rejected(store, bus) -> None:
+    inc = _replay_incident(store, bus)
+    stale = GOOD  # "until 8 PM Saturday": grounded in the prose, wrong for a shifted replay
+    invoke = fake_invoke({NOVA: stale, HAIKU: TIMELESS})
+    assert run(store, inc.id, inc.content_hash, [NOVA, HAIKU], invoke)["outcome"] == "summarized"
+    assert invoke.calls == [NOVA, HAIKU]
+    assert store.get_incident(inc.id).summarizer.model == HAIKU
+
+
+def test_live_incident_has_no_replay_rules_or_suffix(store) -> None:
+    inc = _incident(store)
+    seen: dict[str, str] = {}
+
+    def invoke(model_id, system, prompt, timeout_s):
+        seen["system"] = system
+        return json.dumps(GOOD)
+
+    run(store, inc.id, inc.content_hash, [NOVA], invoke)
+    assert "REPLAY MODE" not in seen["system"]
+    assert store.get_incident(inc.id).spoken_summary == GOOD["spoken_summary"]

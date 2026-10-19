@@ -81,3 +81,32 @@ def test_spoken_overview_has_no_ids() -> None:
     text = build_active_incidents(FIXTURE_INCIDENTS, "Demo Household", "x").spoken_overview
     assert text.startswith("Two things.")
     assert "inc_" not in text
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Avoid sparks", "Avoid sparks."),
+        ("Avoid sparks.", "Avoid sparks."),
+        ("Avoid sparks..", "Avoid sparks."),
+        ("Avoid sparks. ", "Avoid sparks."),
+        ("Leave now!", "Leave now!"),
+        ("", ""),
+    ],
+)
+def test_sentence_normalizes_endings(text, expected) -> None:
+    from nightwatch.domain.incidents import sentence
+
+    assert sentence(text) == expected
+
+
+def test_overview_has_no_doubled_periods() -> None:
+    inc = incident("ai", "Fire risk", supporting="Wind Advisory").model_copy(
+        update={
+            "spoken_summary": "Santa Ana winds make any spark dangerous.",
+            "recommended_actions": ["Avoid activities that can spark fires."],
+        }
+    )
+    text = build_active_incidents([inc], "Demo Household", "x").spoken_overview
+    assert ".." not in text
+    assert text.endswith("dangerous. Avoid activities that can spark fires.")

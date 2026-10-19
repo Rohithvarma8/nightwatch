@@ -12,6 +12,7 @@ from aws_lambda_powertools import Logger, Metrics
 from aws_lambda_powertools.metrics import MetricUnit
 
 from nightwatch_core.models import Summarizer
+from nightwatch_core.timefmt import spoken_until
 from nightwatch_pipeline import settings as settings_mod
 from nightwatch_pipeline.store import Store
 from nightwatch_pipeline.triage import agent, rules
@@ -37,19 +38,30 @@ def run(store: Store, incident_id: str, content_hash: str, models: list[str],
     if incident.content_hash != content_hash:
         return {"outcome": "skipped", "reason": "stale event"}  # a newer event will follow
     signals = store.incident_signals(incident)
-    d = rules.derive(signals, datetime.now(UTC))
+    now = datetime.now(UTC)
+    d = rules.derive(signals, now)
     members = [d.primary] + ([d.supporting] if d.supporting else [])
-    result = agent.summarize(members, incident.evidence, models, invoke=invoke)
+    suffix = None
+    if incident.replay:
+        # Replay prose keeps its original days; the timing comes from the shifted ends_at.
+        household = store.get_household(incident.household_id)
+        tz = household.tz if household else "UTC"
+        suffix = f"In effect until {spoken_until(incident.ends_at, tz, now)}."
+    result = agent.summarize(
+        members, incident.evidence, models, invoke=invoke, replay=incident.replay,
+        spoken_suffix=suffix,
+    )  # fmt: skip
     summarizer = Summarizer(
-        model=result.model if result.output else f"{TEMPLATE_MODEL} (after {result.model})",
+        model=result.model if result.fields else f"{TEMPLATE_MODEL} (after {result.model})",
         latency_ms=result.latency_ms,
         fallback_used=result.fallback_used,
         grounding_passed=result.grounding_passed,
         content_hash=content_hash,
+        template_fields=result.template_fields,
     )
     fields: dict[str, Any] = {"summarizer": summarizer.model_dump()}
-    if result.output is not None:
-        fields |= result.output.model_dump()
+    if result.fields is not None:
+        fields |= result.fields
     saved = store.save_summary(incident_id, content_hash, fields)
     logger.info(
         "triage done",
@@ -58,7 +70,7 @@ def run(store: Store, incident_id: str, content_hash: str, models: list[str],
     )  # fmt: skip
     metrics.add_metric("TriageFallback", MetricUnit.Count, 1 if result.fallback_used else 0)
     metrics.add_metric("TriageLatencyMs", MetricUnit.Milliseconds, result.latency_ms)
-    return {"outcome": "summarized" if result.output else "fallback", "saved": saved}
+    return {"outcome": "summarized" if result.fields else "fallback", "saved": saved}
 
 
 @cache

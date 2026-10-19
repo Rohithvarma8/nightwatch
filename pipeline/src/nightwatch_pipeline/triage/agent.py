@@ -4,6 +4,10 @@ Async only (triage Lambda). Contract:
 - Input: only the incident's current signals (headline, description, instruction) and evidence.
 - Output: JSON matching TriageOutput's schema (validated), spoken_summary ≤ 40 words.
 - Grounding: every number, time word, and name must appear in the source text, else rejected.
+  Replays run in strict mode: no days, dates, or clock times at all (their prose keeps the original
+  days while timestamps are shifted); the shifted end time is appended by us, not the model.
+- No URLs or domains in spoken text: an action containing one is dropped; a summary containing
+  one keeps the template for that field.
 - Models tried in order (Nova Lite, then Claude Haiku) inside one 8 s budget; then the template.
 """
 
@@ -38,6 +42,13 @@ or plainly implied by them.
 - Never mention IDs, URLs, or codes.
 
 Reply with ONLY a JSON object matching this JSON schema, no other text:
+"""
+
+REPLAY_RULES = """
+REPLAY MODE: this is a replay of an archived alert. Do NOT state any days, dates, clock times, \
+or words like today, tonight, tomorrow, this evening, or weekend, anywhere in your output. \
+Describe only the hazard and what to do; the app adds the timing. Keep spoken_summary to at \
+most 32 words.
 """
 
 
@@ -116,15 +127,34 @@ def invoke_bedrock(model_id: str, system: str, prompt: str, timeout_s: float) ->
 
 @dataclass
 class TriageResult:
-    output: TriageOutput | None
+    fields: dict[str, Any] | None  # accepted fields to write; None = keep the template
     model: str
     latency_ms: int
     grounding_passed: bool | None
     attempts: list[dict[str, Any]] = field(default_factory=list)
+    template_fields: list[str] = field(default_factory=list)  # kept from the template
 
     @property
     def fallback_used(self) -> bool:
-        return self.output is None
+        return self.fields is None
+
+
+def without_urls(out: TriageOutput) -> tuple[dict[str, Any], list[str], int]:
+    """(fields safe to speak, fields that keep the template, number of actions dropped)."""
+    fields: dict[str, Any] = {}
+    template: list[str] = []
+    for name in ("spoken_summary", "detail_summary"):
+        value = getattr(out, name)
+        if grounding.has_url(value):
+            template.append(name)
+        else:
+            fields[name] = value
+    actions = [a for a in out.recommended_actions if not grounding.has_url(a)]
+    if actions:
+        fields["recommended_actions"] = actions
+    else:
+        template.append("recommended_actions")
+    return fields, template, len(out.recommended_actions) - len(actions)
 
 
 def summarize(
@@ -134,10 +164,18 @@ def summarize(
     invoke: Invoke = invoke_bedrock,
     budget_s: float = BUDGET_S,
     clock: Callable[[], float] = time.monotonic,
+    *,
+    replay: bool = False,
+    spoken_suffix: str | None = None,
 ) -> TriageResult:
+    """Try each model in order within the budget; first grounded output wins.
+
+    `replay` turns on strict grounding (no timing words). `spoken_suffix` (the until-time we
+    computed) is appended to the accepted spoken_summary; the total must stay ≤ 40 words.
+    """
     source = source_text(signals, evidence)
     prompt = build_prompt(signals, evidence)
-    system = SYSTEM_PROMPT + OUTPUT_SCHEMA
+    system = SYSTEM_PROMPT + OUTPUT_SCHEMA + (REPLAY_RULES if replay else "")
     start = clock()
     attempts: list[dict[str, Any]] = []
     last_grounding: bool | None = None
@@ -156,16 +194,28 @@ def summarize(
             attempts.append({"model": model_id, "error": f"{type(e).__name__}: {e}"[:300]})
             continue
         ms = int((clock() - t0) * 1000)
-        check = grounding.check(
-            [out.spoken_summary, out.detail_summary, *out.recommended_actions], source
-        )
+        fields, template_fields, dropped = without_urls(out)
+        texts = [
+            *(fields[k] for k in ("spoken_summary", "detail_summary") if k in fields),
+            *fields.get("recommended_actions", []),
+        ]
+        check = grounding.check(texts, source, strict=replay)
         last_grounding = check.passed
-        attempts.append(
-            {"model": model_id, "latency_ms": ms, "grounded": check.passed,
-             "violations": check.violations, "spoken_summary": out.spoken_summary}
-        )  # fmt: skip
-        if check.passed:
-            return TriageResult(out, model_id, ms, True, attempts)
+        attempt: dict[str, Any] = {
+            "model": model_id, "latency_ms": ms, "grounded": check.passed,
+            "violations": check.violations, "spoken_summary": out.spoken_summary,
+            "url_fields": template_fields, "dropped_actions": dropped,
+        }  # fmt: skip
+        attempts.append(attempt)
+        if not check.passed or not fields:
+            continue
+        if spoken_suffix and "spoken_summary" in fields:
+            spoken = f"{fields['spoken_summary'].rstrip()} {spoken_suffix}"
+            if len(spoken.split()) > MAX_SPOKEN_WORDS:
+                attempt["error"] = f"over {MAX_SPOKEN_WORDS} words with the until-time"
+                continue
+            fields["spoken_summary"] = spoken
+        return TriageResult(fields, model_id, ms, True, attempts, template_fields)
     total_ms = int((clock() - start) * 1000)
     last_model = attempts[-1]["model"] if attempts else "none"
     return TriageResult(None, last_model, total_ms, last_grounding, attempts)
