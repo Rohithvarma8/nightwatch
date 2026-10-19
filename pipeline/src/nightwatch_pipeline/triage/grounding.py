@@ -51,11 +51,25 @@ def has_url(text: str) -> bool:
     return bool(_URL.search(text))
 
 
+# Month names that are also everyday words ("winds may cause…", "march toward").
+_AMBIGUOUS_MONTHS = {"may", "march"}
+_MONTH_AS_DATE = re.compile(
+    r"\b(?:May|March)\s+\d|\d\s+(?:May|March)\b|(?<=[a-z,]\s)(?:May|March)\b"
+)
+
+
+def _time_words(text: str, vocabulary: set[str]) -> set[str]:
+    """Time words in `text`; "may"/"march" only when used as a month (next to a number, or
+    capitalized mid-sentence), not as the verb."""
+    words = set(re.findall(r"[a-z]+", text.lower())) & vocabulary
+    ambiguous = words & _AMBIGUOUS_MONTHS
+    if ambiguous and not _MONTH_AS_DATE.search(text):
+        words -= ambiguous
+    return words
+
+
 def _timing_violations(text: str) -> list[str]:
-    found = [
-        f"replay timing {w!r}"
-        for w in sorted(set(re.findall(r"[a-z]+", text.lower())) & _REPLAY_TIME_WORDS)
-    ]
+    found = [f"replay timing {w!r}" for w in sorted(_time_words(text, _REPLAY_TIME_WORDS))]
     found += [f"replay clock time {m.group(0).rstrip('.')!r}" for m in _CLOCK.finditer(text)]
     found += [f"replay date {m.group(0)!r}" for m in _NUMERIC_DATE.finditer(text)]
     return found
@@ -136,7 +150,7 @@ def check(output_texts: list[str], source_text: str, *, strict: bool = False) ->
         for n in sorted(_numbers_in(text)):
             if n not in source_nums:
                 violations.append(f"number {n!r} not in source")
-        for word in sorted(set(re.findall(r"[a-z]+", text.lower())) & _TIME_WORDS):
+        for word in sorted(_time_words(text, _TIME_WORDS)):
             if word not in source_words:
                 violations.append(f"time word {word!r} not in source")
         for options in _place_candidates(text):

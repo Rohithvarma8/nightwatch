@@ -180,6 +180,25 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
 
 ---
 
+### FL-010: Inline IAM policy change took ~4.5 minutes to reach a running Lambda while the policy simulator already said "allowed"
+
+- **Product / tool:** AWS IAM (inline role policy via Terraform `aws_iam_role_policy`), Lambda (us-west-2)
+- **Date:** 2026-10-19
+- **Task attempted:** Let the triage Lambda's role `GetItem` household profiles (`dynamodb:LeadingKeys` `HH#*`) after adding that read.
+- **Steps taken:**
+  1. `terraform apply` updated the inline policy (`Modifications complete after 0s`, ~20:35:00Z). `aws iam get-role-policy` showed the new `ReadHouseholdProfile` statement immediately.
+  2. `aws iam simulate-principal-policy --action-names dynamodb:GetItem --context-entries ContextKeyName=dynamodb:LeadingKeys,ContextKeyValues=HH#hh_demo,ContextKeyType=stringList` → `allowed`.
+  3. `aws lambda invoke --function-name nightwatch-triage ...` every 20 s.
+- **Expected:** Calls succeed within seconds once the policy is updated and the simulator says allowed.
+- **Actual:** Invokes at 20:35:23, 20:36:28 and 20:37:25 failed with `AccessDeniedException ... not authorized to perform: dynamodb:GetItem ... because no identity-based policy allows the dynamodb:GetItem action`. The first success was at 20:39:23, about 4.5 minutes after the apply.
+- **Severity:** Minor (cost a debugging detour; nothing was wrong with the policy)
+- **Time lost:** ~15 minutes
+- **Workaround:** Retry with backoff. Added `make smoke` (replays one alert end to end and fails on any Lambda error), because moto-based tests don't enforce IAM and wouldn't catch this or the original missing permission.
+- **Actionable suggestion:** Document typical propagation times for inline-policy updates, or have the simulator note that results reflect the stored policy, not what enforcement currently sees.
+- **Evidence:** Triage Lambda logs (CloudWatch `/aws/lambda/nightwatch-triage`, 20:35–20:39Z) and the simulator output above. IAM is documented as eventually consistent; reporting the observed delay.
+
+---
+
 ## Watch list (hypotheses to confirm or discard)
 - [ ] Docs say Builders support spec 2025-11-25, but the Alexa+ client `initialize` sends `protocolVersion: "2025-03-26"` (shown on the Client Lifecycle page). Record what you actually observe.
 - [ ] The "401 without `WWW-Authenticate`" requirement conflicts with the MCP auth spec / RFC 9728 guidance and with SDK/API Gateway defaults that add the header.

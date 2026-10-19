@@ -68,9 +68,26 @@ def test_strict_mode_rejects_any_timing(text: str, violation: str) -> None:
     assert any(violation in v for v in result.violations), result.violations
 
 
-def test_strict_mode_allows_timeless_text() -> None:
-    text = "Strong Santa Ana winds and very dry air mean any spark could start a fast fire."
-    assert check([text], SOURCE, strict=True).passed
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Strong Santa Ana winds and very dry air mean any spark could start a fast fire.",
+        # Seen live from Nova Lite: "may" is the verb here, not the month.
+        "Wind Advisory: Gusty winds may cause unsecured objects to blow around.",
+        "May be windy near the foothills.",
+    ],
+)
+def test_strict_mode_allows_timeless_text(text: str) -> None:
+    result = check([text], SOURCE, strict=True)
+    assert result.passed, result.violations
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["The warning lasts until May 3.", "It began on 12 March.", "Expect this, in May, again."],
+)
+def test_strict_mode_still_rejects_may_and_march_as_months(text: str) -> None:
+    assert not check([text], SOURCE, strict=True).passed
 
 
 def test_strict_off_keeps_grounded_days() -> None:

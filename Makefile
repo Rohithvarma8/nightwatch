@@ -8,7 +8,7 @@ WARM_TFVARS := $(TF_DEV)/warm.auto.tfvars
 AWS_ENV := AWS_PROFILE=nightwatch AWS_DEFAULT_REGION=us-west-2
 TF_OUT   = terraform -chdir=$(CURDIR)/$(TF_DEV) output -raw
 
-.PHONY: setup lint test run inspect build deploy warm-on warm-off seed-household replay reset-incidents
+.PHONY: setup lint test run inspect build deploy warm-on warm-off seed-household replay reset-incidents smoke
 
 setup:  ## Install deps for shared/, pipeline/, server/ (uv)
 	for p in $(PACKAGES); do (cd $$p && uv sync --all-extras) || exit 1; done
@@ -58,3 +58,6 @@ replay:  ## Replay one archived NWS alert through the bus: make replay FILE=~/ni
 reset-incidents:  ## DEV ONLY: delete incidents, OPENKEYs, and signal records (keeps households); live alerts re-ingest within 5 min
 	@test "$(CONFIRM)" = "yes" || (echo "usage: make reset-incidents CONFIRM=yes"; exit 1)
 	cd pipeline && $(AWS_ENV) uv run python -m nightwatch_pipeline.cutover --table $$($(TF_OUT) table_name) --confirm
+
+smoke:  ## Post-deploy smoke test: replay one alert end to end, fail on any Lambda error (moto doesn't enforce IAM)
+	$(AWS_ENV) scripts/smoke.sh $(FILE)
