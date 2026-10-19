@@ -9,6 +9,6 @@ Async triage agent (Strands Agents + Amazon Bedrock). The incident builder publi
 
 Models: `model_id` (Nova Lite) first, then `fallback_model_id` (Claude Haiku), within one 8 s budget. If both fail, the deterministic template stays and `summarizer.fallback_used = true`.
 
-- IAM: `bedrock:InvokeModel` only on those models' ARNs (an inference profile also needs its foundation-model ARNs); table access is scoped to `INC#*` and `SIG#*`.
+- IAM: `bedrock:InvokeModel` only on those models' ARNs (an inference profile also needs its foundation-model ARNs); table access is scoped to `INC#*` and `SIG#*` (read/update) plus `HH#*` (GetItem only, for the household time zone).
 - The MCP server never calls Bedrock.
 - No reserved concurrency, because the account's concurrency limit is 10 and AWS keeps 10 unreserved.

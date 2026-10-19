@@ -55,6 +55,17 @@ data "aws_iam_policy_document" "this" {
   }
 
   statement {
+    sid       = "ReadHouseholdProfile"
+    actions   = ["dynamodb:GetItem"] # time zone for the replay until-time
+    resources = [var.table_arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["HH#*"]
+    }
+  }
+
+  statement {
     sid       = "InvokeTriageModels"
     actions   = ["bedrock:InvokeModel"]
     resources = local.model_arns
