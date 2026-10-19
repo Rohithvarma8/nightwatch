@@ -38,14 +38,15 @@ while :; do
   sleep 5
 done
 
-echo "$done_line" | python3 -c '
+python3 - "$done_line" <<'PY'
 import json, sys
-d = json.loads(json.loads(sys.stdin.read()))
+d = json.loads(json.loads(sys.argv[1]))
 s = d["summarizer"]
-print(f"triage: saved={d[\"saved\"]} model={s[\"model\"]} fallback_used={s[\"fallback_used\"]} "
-      f"grounding_passed={s[\"grounding_passed\"]} template_fields={s.get(\"template_fields\")}")
+print("triage: saved=%s model=%s fallback_used=%s grounding_passed=%s template_fields=%s"
+      % (d["saved"], s["model"], s["fallback_used"], s["grounding_passed"], s.get("template_fields")))
 if s["fallback_used"]:
-    print("WARN: template fallback (see attempts in the triage log)")'
+    print("WARN: template fallback; attempts:", json.dumps(d.get("attempts"))[:600])
+PY
 
 OUT="$(mktemp)"
 trap 'rm -f "$OUT"' EXIT
