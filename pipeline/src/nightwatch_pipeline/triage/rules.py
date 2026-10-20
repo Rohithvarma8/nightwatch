@@ -6,13 +6,16 @@ Rules:
   Wind Advisory) for the same zone with overlapping time windows → one "Fire risk" incident,
   the wind alert as a supporting signal (Evidence type `related_hazard`). Red flag criteria are
   wind + low humidity, so this pairing is meteorologically grounded.
+- Prod: an alarm on service S. A deployment of S that finished within 15 minutes before the alarm
+  went into ALARM adds `deploy_proximity` evidence, raises severity to high, and makes rollback
+  the top action. Deploys of other services in that window are reported, never blamed.
 - Nothing else merges across hazard families, and nothing links home hazards to prod incidents.
 """
 
 import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from nightwatch_core.models import (
     SEVERITY_RANK,
@@ -30,6 +33,7 @@ from nightwatch_pipeline.triage import templates
 FIRE_EVENTS = frozenset({"Red Flag Warning", "Fire Weather Watch"})
 WIND_EVENTS = frozenset({"High Wind Watch", "High Wind Warning", "Wind Advisory"})
 FIRE_RISK_TITLE = "Fire risk"
+DEPLOY_WINDOW = timedelta(minutes=15)
 
 
 def correlation_key(signal: Signal) -> str:
@@ -94,6 +98,15 @@ def related_hazard_evidence(fire: Signal, wind: Signal) -> Evidence:
 
 
 @dataclass(frozen=True)
+class Proximity:
+    """A deploy of the alarmed service shortly before the alarm (prod correlation)."""
+
+    deploy: Signal
+    minutes: int
+    other_services_changed: list[str]
+
+
+@dataclass(frozen=True)
 class Derived:
     title: str
     severity: Severity
@@ -104,6 +117,108 @@ class Derived:
     evidence: list[Evidence]
     refs: list[SignalRef]
     content_hash: str
+    proximity: Proximity | None = None
+
+    @property
+    def members(self) -> list[Signal]:
+        """The signals a summary may narrate (also the grounding source)."""
+        extra = [self.supporting] if self.supporting else []
+        if self.proximity:
+            extra.append(self.proximity.deploy)
+        return [self.primary, *extra]
+
+
+def _ref(s: Signal, role: str) -> SignalRef:
+    return SignalRef(
+        source=s.source,
+        external_id=s.external_id,
+        observed_at=s.sent_at,
+        summary=s.headline,
+        url=s.url,
+        event=s.event,
+        hazard_family=s.hazard_family,
+        message_type=s.message_type,
+        certainty=s.nws_certainty,
+        ends_at=s.ends_at,
+        role=role,  # type: ignore[arg-type]
+    )
+
+
+def _hash(status: str, members: Iterable[Signal]) -> str:
+    fingerprint = "|".join([status, *sorted(m.external_id for m in members)])
+    return hashlib.sha256(fingerprint.encode()).hexdigest()[:16]
+
+
+def deploy_proximity(alarm: Signal, deploys: list[Signal]) -> Proximity | None:
+    """Latest deploy of the alarm's service that ended within 15 min before the alarm."""
+    start = parse_utc(alarm.sent_at)
+    in_window = [d for d in deploys if start - DEPLOY_WINDOW <= parse_utc(d.sent_at) <= start]
+    same = [d for d in in_window if d.area == alarm.area]
+    if not same:
+        return None
+    deploy = max(same, key=lambda d: d.sent_at)
+    minutes = max(1, round((start - parse_utc(deploy.sent_at)).total_seconds() / 60))
+    others = sorted({d.area for d in in_window if d.area != alarm.area})
+    return Proximity(deploy=deploy, minutes=minutes, other_services_changed=others)
+
+
+def proximity_evidence(p: Proximity) -> Evidence:
+    a = p.deploy.attributes
+    unit = "minute" if p.minutes == 1 else "minutes"
+    others = (
+        "no other service changed"
+        if not p.other_services_changed
+        else f"{', '.join(p.other_services_changed)} also changed"
+    )
+    return Evidence(
+        type="deploy_proximity",
+        detail=f"Latency rose {p.minutes} {unit} after deployment {a['deployment_id']} "
+        f"(v{a['from_version']}→v{a['to_version']}); {others}",
+        spoken=f"Latency rose {p.minutes} {unit} after a deploy from version "
+        f"{a['from_version']} to {a['to_version']}",
+        weight=0.8,
+        source_url=p.deploy.url,
+    )
+
+
+def _alarm_evidence(alarm: Signal) -> Evidence:
+    a = alarm.attributes
+    detail = f"{a.get('alarm_name', alarm.event)} in ALARM"
+    if a.get("statistic") and a.get("threshold"):
+        detail += f" ({a['statistic']} {a.get('metric', '')} above {a['threshold']} ms)"
+    return Evidence(type="alarm", detail=detail, weight=1.0, source_url=alarm.url)
+
+
+def derive_prod(signals: list[Signal], now: datetime) -> Derived:
+    """Prod incident from its alarm signals (+ attached deploy signals)."""
+    alarms = sorted((s for s in signals if s.source == "cloudwatch"), key=lambda s: s.sent_at)
+    deploys = [s for s in signals if s.source == "codedeploy"]
+    current = alarms[-1]
+    active = current.message_type != "Cancel" and parse_utc(current.ends_at) > now
+    opened = next(
+        (a for a in reversed(alarms) if a.message_type != "Cancel"), current
+    )  # the ALARM transition this incident is about
+    prox = deploy_proximity(opened, deploys)
+    evidence = [_alarm_evidence(opened)] + ([proximity_evidence(prox)] if prox else [])
+    severity: Severity = "high" if prox else opened.severity
+    refs = [
+        _ref(s, "primary" if s.source == "cloudwatch" else "supporting")
+        for s in sorted(signals, key=lambda s: (s.sent_at, s.external_id))
+    ]
+    status = "open" if active else "resolved"
+    members = [current] + ([prox.deploy] if prox else [])
+    return Derived(
+        title=opened.event,
+        severity=severity,
+        status=status,
+        ends_at=current.ends_at if active else min(current.ends_at, current.sent_at),
+        primary=opened,
+        supporting=None,
+        evidence=evidence,
+        refs=refs,
+        content_hash=_hash(status, members),
+        proximity=prox,
+    )
 
 
 def _primary_family(active: dict[HazardFamily, Signal]) -> HazardFamily:
@@ -115,6 +230,8 @@ def _primary_family(active: dict[HazardFamily, Signal]) -> HazardFamily:
 
 def derive(signals: list[Signal], now: datetime) -> Derived:
     """Incident state as a pure function of its member signals."""
+    if any(s.kind == "prod" for s in signals):
+        return derive_prod(signals, now)
     current = current_by_family(signals)
     active = active_by_family(signals, now)
     pool = active or current  # nothing active → resolved, described by its last messages
@@ -195,12 +312,19 @@ def apply_derived(
         update["resolved_at"] = now_iso
     if d.content_hash != incident.content_hash:
         # Facts changed: deterministic template now, the triage agent rewrites it async.
-        update |= {
-            "spoken_summary": templates.spoken_summary(d.primary, d.supporting, household, now),
-            "detail_summary": templates.detail_summary(d.primary, d.supporting),
-            "recommended_actions": templates.recommended_actions(d.primary, d.supporting),
-            "summarizer": templates.summarizer(),
-        }
+        if d.primary.kind == "prod":
+            update |= {
+                "spoken_summary": templates.prod_spoken_summary(d.primary, d.proximity),
+                "detail_summary": templates.prod_detail_summary(d.primary, d.proximity),
+                "recommended_actions": templates.prod_actions(d.primary, d.proximity),
+            }
+        else:
+            update |= {
+                "spoken_summary": templates.spoken_summary(d.primary, d.supporting, household, now),
+                "detail_summary": templates.detail_summary(d.primary, d.supporting),
+                "recommended_actions": templates.recommended_actions(d.primary, d.supporting),
+            }
+        update["summarizer"] = templates.summarizer()
     changed = any(getattr(incident, k) != v for k, v in update.items())
     if changed:
         update["updated_at"] = now_iso

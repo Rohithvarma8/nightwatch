@@ -13,7 +13,7 @@ from typing import Any
 from aws_lambda_powertools import Logger
 
 from nightwatch_core.ids import new_id
-from nightwatch_core.models import Household, Incident, Signal
+from nightwatch_core.models import DeployRecord, Household, Incident, Signal
 from nightwatch_core.timefmt import parse_utc, to_utc_iso
 from nightwatch_pipeline import settings as settings_mod
 from nightwatch_pipeline.bus import Bus
@@ -24,11 +24,13 @@ from nightwatch_pipeline.triage import rules, templates
 logger = Logger(service="nightwatch-incidents")
 
 
-def _new_incident(signal: Signal, household: Household, now: datetime) -> Incident:
+def _new_incident(
+    signal: Signal, household: Household, now: datetime, extra: list[Signal] | None = None
+) -> Incident:
     shell = Incident(
         id=new_id("inc"),
         household_id=signal.household_id,
-        kind="hazard",
+        kind=signal.kind,
         title=signal.event,
         severity=signal.severity,
         status="open",
@@ -42,17 +44,53 @@ def _new_incident(signal: Signal, household: Household, now: datetime) -> Incide
         replay_original_time=signal.replay_original_time,
         summarizer=templates.summarizer(),
     )
-    return rules.apply_derived(shell, [signal], household, now)
+    return rules.apply_derived(shell, [signal, *(extra or [])], household, now)
 
 
 def _bumped(incident: Incident, prev: Incident) -> Incident:
     return incident.model_copy(update={"version": prev.version + 1})
 
 
+def record_deploy(store: Store, signal: Signal) -> None:
+    a = signal.attributes
+    store.put_deploy(
+        DeployRecord(
+            service=signal.area,
+            deployment_id=a["deployment_id"],
+            from_version=a["from_version"],
+            to_version=a["to_version"],
+            ended_at=signal.sent_at,
+            application=a.get("application", ""),
+            deployment_group=a.get("deployment_group", ""),
+        )
+    )
+
+
+def recent_deploys(store: Store, alarm: Signal, services: list[str]) -> list[Signal]:
+    """Deploy signals (any known service) that ended within the proximity window before the
+    alarm. Attached to the incident so rules.derive sees them on every re-derive."""
+    if alarm.message_type == "Cancel":
+        return []
+    start = to_utc_iso(parse_utc(alarm.sent_at) - rules.DEPLOY_WINDOW)
+    records = [
+        r
+        for svc in dict.fromkeys([alarm.area, *services])
+        for r in store.deploys_between(svc, start, alarm.sent_at)
+    ]
+    return store.get_signals([("codedeploy", r.deployment_id) for r in records])
+
+
 def process_signal(
-    store: Store, signal: Signal, now: datetime, scheduler: EscalationScheduler | None = None
+    store: Store,
+    signal: Signal,
+    now: datetime,
+    scheduler: EscalationScheduler | None = None,
+    prod_services: list[str] | None = None,
 ) -> tuple[str, list[Incident]]:
     """Returns (outcome, incidents whose content changed)."""
+    if signal.source == "codedeploy":
+        record_deploy(store, signal)  # SVC#<service> / DEPLOY#<endedAt>#<id>
+        return "deploy_recorded", []
     household = store.get_household(signal.household_id)
     if household is None:
         raise LookupError(f"unknown household {signal.household_id}")
@@ -67,7 +105,10 @@ def process_signal(
     if target is None:
         if signal.message_type == "Cancel" or parse_utc(signal.ends_at) <= now:
             return "noop", []
-        created = _new_incident(signal, household, now)
+        deploys = (
+            recent_deploys(store, signal, prod_services or []) if signal.kind == "prod" else []
+        )
+        created = _new_incident(signal, household, now, deploys)
         if scheduler is not None and needs_escalation(created, store.get_policy(household.id)):
             # Schedule first: if the incident write then loses a race, the orphan timer no-ops.
             at = due_at(created, household, now)
@@ -82,7 +123,17 @@ def process_signal(
     elif any(r.external_id == signal.external_id for r in target.signals):
         return "noop", []  # redelivered event
     else:
-        signals = [*store.incident_signals(target), signal]
+        known = {r.external_id for r in target.signals}
+        deploys = (
+            [
+                d
+                for d in recent_deploys(store, signal, prod_services or [])
+                if d.external_id not in known
+            ]
+            if signal.kind == "prod"
+            else []
+        )
+        signals = [*store.incident_signals(target), signal, *deploys]
         updated = rules.apply_derived(target, signals, household, now)
         if new_keys:
             updated = updated.model_copy(update={"related_keys": [*target.related_keys, *new_keys]})
@@ -174,7 +225,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         result: dict[str, Any] = {"resolved": resolved}
     else:
         signal = Signal.model_validate(event["detail"])
-        outcome, changed = process_signal(store, signal, now, scheduler)
+        outcome, changed = process_signal(store, signal, now, scheduler, cfg.prod_services)
         result = {"outcome": outcome}
     open_changed = [i for i in changed if i.status != "resolved"]
     bus.publish_incident_changed(open_changed)

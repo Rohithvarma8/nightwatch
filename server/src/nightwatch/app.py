@@ -11,7 +11,7 @@ from nightwatch import settings as settings_mod
 from nightwatch.domain.fixtures import FixtureNotifier, FixtureSource
 from nightwatch.domain.incidents import IncidentSource, Notifier
 from nightwatch.domain.runbooks import load_runbooks
-from nightwatch.tools import actions, explain, incidents, runbooks
+from nightwatch.tools import actions, explain, incidents, rollback, runbooks
 
 MCP_PATH = "/mcp"
 # The SDK's defaults when host="127.0.0.1"; kept so `make run` and the Inspector keep working.
@@ -55,7 +55,17 @@ def notifier_for(cfg: settings_mod.Settings) -> Notifier:
     return SnsNotifier(cfg.notify_topic_arn)
 
 
-def create_server(source: IncidentSource, notifier: Notifier) -> MCPServer:
+def deployer_for(cfg: settings_mod.Settings) -> rollback.Deployer | None:
+    if not (cfg.codedeploy_app and cfg.codedeploy_group):
+        return None
+    from nightwatch.store.deploys import CodeDeployRollback
+
+    return CodeDeployRollback(cfg.codedeploy_app, cfg.codedeploy_group)
+
+
+def create_server(
+    source: IncidentSource, notifier: Notifier, deployer: rollback.Deployer | None = None
+) -> MCPServer:
     server = MCPServer(
         name="nightwatch",
         title="Night Watch",
@@ -66,6 +76,7 @@ def create_server(source: IncidentSource, notifier: Notifier) -> MCPServer:
     explain.register(server, source)
     runbooks.register(server, source, load_runbooks())  # read once at init, no per-request I/O
     actions.register(server, source, notifier)
+    rollback.register(server, source, deployer)
     server.custom_route("/healthz", methods=["GET"], include_in_schema=False)(healthz)
     return server
 
@@ -87,7 +98,8 @@ def transport_security(allowed_hosts: str) -> TransportSecuritySettings:
 def create_app() -> tuple[Starlette, ASGIApp]:
     """Return (mcp_app, asgi). mcp_app owns the lifespan; asgi is what uvicorn serves."""
     cfg = settings_mod.load()
-    mcp_app = create_server(incident_source(cfg), notifier_for(cfg)).streamable_http_app(
+    server = create_server(incident_source(cfg), notifier_for(cfg), deployer_for(cfg))
+    mcp_app = server.streamable_http_app(
         streamable_http_path=MCP_PATH,
         stateless_http=True,
         json_response=True,

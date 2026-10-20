@@ -128,7 +128,18 @@ data "aws_iam_policy_document" "builder" {
     condition {
       test     = "ForAllValues:StringLike"
       variable = "dynamodb:LeadingKeys"
-      values   = ["HH#*", "INC#*"]
+      values   = ["HH#*", "INC#*", "SVC#*"]
+    }
+  }
+
+  statement {
+    sid       = "QueryDeploys"
+    actions   = ["dynamodb:Query"]
+    resources = [var.table_arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["SVC#*"]
     }
   }
 
@@ -194,6 +205,7 @@ resource "aws_lambda_function" "builder" {
     variables = merge(local.common_env, {
       ESCALATION_TARGET_ARN = var.escalation_target_arn
       ESCALATION_ROLE_ARN   = var.escalation_scheduler_role_arn
+      PROD_SERVICES         = join(",", var.prod_services)
     })
   }
 
@@ -292,4 +304,114 @@ resource "aws_scheduler_schedule" "sweep" {
       maximum_retry_attempts = 0
     }
   }
+}
+
+# --- Prod: CloudWatch alarms + CodeDeploy deployments (default bus) → normalizer --------------
+
+locals {
+  prod_name = "${var.name_prefix}-ingest-prod"
+}
+
+resource "aws_cloudwatch_log_group" "prod" {
+  name              = "/aws/lambda/${local.prod_name}"
+  retention_in_days = var.log_retention_days
+}
+
+resource "aws_iam_role" "prod" {
+  name               = "${local.prod_name}-lambda"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
+}
+
+data "aws_iam_policy_document" "prod" {
+  statement {
+    sid       = "Logs"
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.prod.arn}:*"]
+  }
+
+  statement {
+    sid       = "DeploymentVersions"
+    actions   = ["codedeploy:GetDeployment"]
+    resources = [var.deployment_group_arn]
+  }
+
+  statement {
+    sid       = "DedupeSignals"
+    actions   = ["dynamodb:PutItem", "dynamodb:DeleteItem"]
+    resources = [var.table_arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["SIG#*"]
+    }
+  }
+
+  statement {
+    sid       = "PublishSignals"
+    actions   = ["events:PutEvents"]
+    resources = [aws_cloudwatch_event_bus.this.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "prod" {
+  name   = "ingest-prod"
+  role   = aws_iam_role.prod.id
+  policy = data.aws_iam_policy_document.prod.json
+}
+
+resource "aws_lambda_function" "prod" {
+  function_name    = local.prod_name
+  role             = aws_iam_role.prod.arn
+  runtime          = "python3.12"
+  architectures    = ["arm64"]
+  handler          = "nightwatch_pipeline.ingest.prod.handler"
+  filename         = var.zip_path
+  source_code_hash = filebase64sha256(var.zip_path)
+  memory_size      = 256
+  timeout          = 15
+
+  environment {
+    variables = local.common_env
+  }
+
+  depends_on = [aws_cloudwatch_log_group.prod, aws_iam_role_policy.prod]
+}
+
+resource "aws_cloudwatch_event_rule" "alarms" {
+  name        = "${var.name_prefix}-alarm-state-change"
+  description = "Night Watch prod alarms → normalizer."
+  event_pattern = jsonencode({
+    source        = ["aws.cloudwatch"]
+    "detail-type" = ["CloudWatch Alarm State Change"]
+    detail        = { alarmName = [{ prefix = var.alarm_name_prefix }] }
+  })
+}
+
+resource "aws_cloudwatch_event_rule" "deploys" {
+  name        = "${var.name_prefix}-codedeploy-state-change"
+  description = "Demo service deployments → normalizer."
+  event_pattern = jsonencode({
+    source        = ["aws.codedeploy"]
+    "detail-type" = ["CodeDeploy Deployment State-change Notification"]
+    detail        = { application = [var.codedeploy_app] }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "alarms" {
+  rule = aws_cloudwatch_event_rule.alarms.name
+  arn  = aws_lambda_function.prod.arn
+}
+
+resource "aws_cloudwatch_event_target" "deploys" {
+  rule = aws_cloudwatch_event_rule.deploys.name
+  arn  = aws_lambda_function.prod.arn
+}
+
+resource "aws_lambda_permission" "prod_from_rules" {
+  for_each      = { alarms = aws_cloudwatch_event_rule.alarms.arn, deploys = aws_cloudwatch_event_rule.deploys.arn }
+  statement_id  = "Allow-${each.key}"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.prod.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = each.value
 }

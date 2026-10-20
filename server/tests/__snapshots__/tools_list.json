@@ -744,5 +744,91 @@
       "type": "object"
     },
     "title": "Escalate an incident"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Roll back a deploy"
+    },
+    "description": "Use only when the user explicitly asks to roll back a bad deploy ('roll it back', 'roll back checkout'). Starts a deployment that returns the service to the version before the deploy linked to the incident. Requires confirm=true: first ask the user to confirm, then call again with confirm=true. Refuses if the latest deploy isn't the one linked to the alarm.",
+    "inputSchema": {
+      "properties": {
+        "confirm": {
+          "description": "Must be true. Ask the user to confirm before setting it.",
+          "title": "Confirm",
+          "type": "boolean"
+        },
+        "incident_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exact incident id from a previous result, if known.",
+          "title": "Incident Id"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How the user referred to the incident, e.g. 'the checkout alarm'.",
+          "title": "Reference"
+        }
+      },
+      "required": [
+        "confirm"
+      ],
+      "title": "rollback_deployArguments",
+      "type": "object"
+    },
+    "name": "rollback_deploy",
+    "outputSchema": {
+      "properties": {
+        "deployment_id": {
+          "title": "Deployment Id",
+          "type": "string"
+        },
+        "from_version": {
+          "title": "From Version",
+          "type": "string"
+        },
+        "service": {
+          "title": "Service",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "to_version": {
+          "title": "To Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "deployment_id",
+        "service",
+        "from_version",
+        "to_version",
+        "status"
+      ],
+      "title": "RollbackResult",
+      "type": "object"
+    },
+    "title": "Roll back a deploy"
   }
 ]

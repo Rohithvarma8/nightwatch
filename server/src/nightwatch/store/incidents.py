@@ -13,7 +13,7 @@ from botocore.config import Config
 
 from nightwatch_core import keys
 from nightwatch_core.ids import new_id
-from nightwatch_core.models import Contact, EscalationPolicy, Incident
+from nightwatch_core.models import Contact, DeployRecord, EscalationPolicy, Incident
 
 # Fail fast: the whole Alexa round trip has 500 ms.
 _BOTO_CONFIG = Config(connect_timeout=1, read_timeout=1, retries={"max_attempts": 2})
@@ -163,3 +163,12 @@ class DynamoIncidentSource:
         if not item or item.get("household_id") != self._household_id:
             return None
         return Incident.model_validate(item)
+
+    def latest_deploy(self, service: str) -> DeployRecord | None:
+        items = self._table.query(
+            KeyConditionExpression=Key("PK").eq(keys.service_pk(service))
+            & Key("SK").begins_with("DEPLOY#"),
+            ScanIndexForward=False,
+            Limit=1,
+        ).get("Items", [])
+        return DeployRecord.model_validate(items[0]) if items else None

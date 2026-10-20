@@ -40,7 +40,7 @@ def run(store: Store, incident_id: str, content_hash: str, models: list[str],
     signals = store.incident_signals(incident)
     now = datetime.now(UTC)
     d = rules.derive(signals, now)
-    members = [d.primary] + ([d.supporting] if d.supporting else [])
+    members = d.members
     suffix = None
     if incident.replay:
         # Replay prose keeps its original days; the timing comes from the shifted ends_at.

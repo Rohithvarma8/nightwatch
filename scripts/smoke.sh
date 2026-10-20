@@ -15,6 +15,8 @@ LOG_GROUPS=(
   /aws/lambda/nightwatch-triage
   /aws/lambda/nightwatch-notifier
   /aws/lambda/nightwatch-escalation
+  /aws/lambda/nightwatch-ingest-prod
+  /aws/lambda/nightwatch-loadgen
 )
 # Also look back over the last SMOKE_LOOKBACK_S (default 15 min) for notifier/escalation errors:
 # those Lambdas fire on their own schedule (escalation timers, async SNS delivery).
@@ -35,7 +37,7 @@ deadline=$(( $(date +%s) + TIMEOUT ))
 while :; do
   for g in "${LOG_GROUPS[@]}"; do
     since="$T0"
-    case "$g" in *notifier|*escalation) since="$LOOKBACK" ;; esac
+    case "$g" in *notifier|*escalation|*ingest-prod|*loadgen) since="$LOOKBACK" ;; esac
     errors="$(logs "$g" "$since" | grep -E '\[ERROR\]|Task timed out|AccessDenied|error: ' || true)"
     if [ -n "$errors" ]; then
       echo "FAIL: errors in $g:"; echo "$errors" | cut -c1-400; exit 1

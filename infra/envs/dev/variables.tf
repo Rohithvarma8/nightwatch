@@ -45,3 +45,9 @@ variable "ses_sender_email" {
   type        = string
   sensitive   = true
 }
+
+variable "loadgen_enabled" {
+  description = "Run the demo-service load generator (1 run/min). Set false after recording."
+  type        = bool
+  default     = true
+}

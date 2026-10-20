@@ -23,7 +23,7 @@ from nightwatch.domain.actions import (
     describe,
     resolve_contact,
 )
-from nightwatch.domain.incidents import IncidentSource, Notifier, spoken_title
+from nightwatch.domain.incidents import IncidentSource, Notifier, inline_title
 from nightwatch.tools.common import error, resolve_incident
 from nightwatch_core.messages import Kind, notification, wire_message
 from nightwatch_core.models import Contact, Incident
@@ -115,7 +115,7 @@ def register(server: MCPServer, source: IncidentSource, notifier: Notifier) -> N
         )
         updated, changed = source.acknowledge(incident.id, now)
         if updated is None or updated.status == "resolved":
-            return error(f"The {spoken_title(incident)} is already resolved.")
+            return error(f"The {inline_title(incident)} is already resolved.")
         if changed:
             source.add_event(incident.id, "acknowledged", now, by="voice")
         result = AckResult(
@@ -123,14 +123,14 @@ def register(server: MCPServer, source: IncidentSource, notifier: Notifier) -> N
             escalation_cancelled=pending and changed,
         )  # fmt: skip
         if not changed:
-            text = f"The {spoken_title(updated)} was already acknowledged."
+            text = f"The {inline_title(updated)} was already acknowledged."
         elif result.escalation_cancelled:
             text = (
-                f"Got it. I've acknowledged the {spoken_title(updated)}, "
+                f"Got it. I've acknowledged the {inline_title(updated)}, "
                 "so the escalation is cancelled."
             )
         else:
-            text = f"Got it. I've acknowledged the {spoken_title(updated)}."
+            text = f"Got it. I've acknowledged the {inline_title(updated)}."
         return _ok(text, result)
 
     @server.tool(
@@ -174,7 +174,7 @@ def register(server: MCPServer, source: IncidentSource, notifier: Notifier) -> N
         )  # fmt: skip
         text = (
             f"Done. I sent {person.name} {channels_phrase(person.channel_names)} about the "
-            f"{spoken_title(incident)}."
+            f"{inline_title(incident)}."
         )
         return _ok(text, result)
 
@@ -205,7 +205,7 @@ def register(server: MCPServer, source: IncidentSource, notifier: Notifier) -> N
             return error("There's no escalation contact set up for this household yet.")
         escalated = source.mark_escalated(incident.id, now)
         if escalated is None:
-            return error(f"The {spoken_title(incident)} is already resolved.")
+            return error(f"The {inline_title(incident)} is already resolved.")
         _, failed = _send(source, notifier, escalated, first, "escalation", now)
         if failed:
             return failed
@@ -216,6 +216,6 @@ def register(server: MCPServer, source: IncidentSource, notifier: Notifier) -> N
         )  # fmt: skip
         text = (
             f"Escalated. I sent {describe(first)} {channels_phrase(first.channel_names)} about "
-            f"the {spoken_title(incident)}."
+            f"the {inline_title(incident)}."
         )
         return _ok(text, result)

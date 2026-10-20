@@ -66,6 +66,17 @@ variable "notify_topic_arn" {
   type        = string
 }
 
+variable "rollback" {
+  description = "rollback_deploy target: CodeDeploy app/group names and ARNs. null disables it."
+  type = object({
+    app                  = string
+    group                = string
+    app_arn              = string
+    deployment_group_arn = string
+  })
+  default = null
+}
+
 variable "household_id" {
   description = "Household the tools read (single demo household until account linking)."
   type        = string

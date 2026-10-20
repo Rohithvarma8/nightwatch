@@ -13,6 +13,7 @@ class Settings:
     notify_topic_arn: str
     escalation_target_arn: str
     escalation_role_arn: str
+    prod_services: list[str]
 
 
 def load() -> Settings:
@@ -24,4 +25,5 @@ def load() -> Settings:
         notify_topic_arn=os.environ.get("NOTIFY_TOPIC_ARN", ""),
         escalation_target_arn=os.environ.get("ESCALATION_TARGET_ARN", ""),
         escalation_role_arn=os.environ.get("ESCALATION_ROLE_ARN", ""),
+        prod_services=[s for s in os.environ.get("PROD_SERVICES", "").split(",") if s],
     )

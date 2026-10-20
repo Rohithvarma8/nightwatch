@@ -11,7 +11,7 @@ from nightwatch.domain.models import (
     Severity,
 )
 from nightwatch_core.messages import sentence
-from nightwatch_core.models import Contact, EscalationPolicy, Incident
+from nightwatch_core.models import Contact, DeployRecord, EscalationPolicy, Incident
 from nightwatch_core.timefmt import parse_utc
 
 MAX_LIMIT = 5
@@ -49,6 +49,8 @@ class IncidentSource(Protocol):
     def add_event(
         self, incident_id: str, event_type: str, now: datetime, **detail: str
     ) -> None: ...
+
+    def latest_deploy(self, service: str) -> DeployRecord | None: ...
 
 
 class Notifier(Protocol):
@@ -103,6 +105,11 @@ def select_active(
 
 def spoken_title(incident: Incident | IncidentView) -> str:
     return f"{REPLAY_PREFIX} {incident.title}" if incident.replay else incident.title
+
+
+def inline_title(incident: Incident | IncidentView) -> str:
+    """Mid-sentence form: 'the replayed Red Flag Warning' (not 'the Replayed alert: …')."""
+    return f"replayed {incident.title}" if incident.replay else incident.title
 
 
 def to_view(incident: Incident) -> IncidentView:

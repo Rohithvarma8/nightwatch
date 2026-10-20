@@ -4,9 +4,13 @@ Only facts from the signals: event names, the place name, and end times. No inve
 """
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from nightwatch_core.models import HazardFamily, Household, Signal, Summarizer
 from nightwatch_core.timefmt import spoken_until
+
+if TYPE_CHECKING:
+    from nightwatch_pipeline.triage.rules import Proximity
 
 TEMPLATE_MODEL = "template-v1"
 
@@ -65,3 +69,37 @@ def detail_summary(primary: Signal, supporting: Signal | None = None) -> str:
 
 def summarizer() -> Summarizer:
     return Summarizer(model=TEMPLATE_MODEL, latency_ms=0, fallback_used=False)
+
+
+# --- prod (alarm + deploy) ------------------------------------------------------------------
+
+
+def prod_spoken_summary(alarm: Signal, proximity: "Proximity | None") -> str:
+    """No IDs (spoken). Numbers come from the alarm and deploy facts."""
+    service = alarm.area_name
+    if proximity is not None:
+        a = proximity.deploy.attributes
+        unit = "minute" if proximity.minutes == 1 else "minutes"
+        return (
+            f"{service} latency rose above its alarm threshold {proximity.minutes} {unit} after "
+            f"a deploy from version {a['from_version']} to {a['to_version']}."
+        )
+    threshold = alarm.attributes.get("threshold")
+    limit = f" of {threshold} milliseconds" if threshold else ""
+    return f"{service} latency is above its alarm threshold{limit}."
+
+
+def prod_detail_summary(alarm: Signal, proximity: "Proximity | None") -> str:
+    text = alarm.headline
+    if proximity is not None:
+        text += f" {proximity.deploy.headline}"
+    return text
+
+
+def prod_actions(alarm: Signal, proximity: "Proximity | None") -> list[str]:
+    if proximity is not None:
+        return [
+            "Roll back the latest deploy",
+            f"Watch the {alarm.area_name} latency alarm after the rollback",
+        ]
+    return [f"Check the {alarm.area_name} dashboard and recent changes"]

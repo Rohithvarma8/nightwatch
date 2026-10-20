@@ -43,7 +43,7 @@ def test_ai_action_period_is_not_doubled() -> None:
 
 
 def test_prod_incident_has_no_place_or_until() -> None:
-    inc = _incident(kind="prod", title="checkout-service latency", area_name=None,
+    inc = _incident(kind="prod", title="checkout-service latency", area_name="checkout-service",
                     recommended_actions=["Roll back the latest deploy"])  # fmt: skip
     _, body = notification(inc, "America/Los_Angeles", NOW, "notify")
     assert body == "checkout-service latency. Roll back the latest deploy. —Night Watch"

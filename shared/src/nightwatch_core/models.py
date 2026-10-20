@@ -8,7 +8,7 @@ Kind = Literal["hazard", "prod"]
 Severity = Literal["critical", "high", "moderate", "low"]
 Status = Literal["open", "acknowledged", "escalated", "resolved"]
 Source = Literal["nws", "airnow", "fire", "cloudwatch", "codedeploy"]
-HazardFamily = Literal["fire_weather", "wind", "heat", "cold", "coastal", "air", "other"]
+HazardFamily = Literal["fire_weather", "wind", "heat", "cold", "coastal", "air", "other", "prod"]
 
 SEVERITY_RANK: dict[Severity, int] = {"critical": 0, "high": 1, "moderate": 2, "low": 3}
 
@@ -63,6 +63,7 @@ class Signal(BaseModel):
     id: str
     household_id: str
     source: Source
+    kind: Kind = "hazard"
     external_id: str
     event: str
     hazard_family: HazardFamily
@@ -83,8 +84,21 @@ class Signal(BaseModel):
     nws_urgency: str | None = None
     nws_certainty: str | None = None
     references: list[str] = Field(default_factory=list)
+    attributes: dict[str, str] = Field(default_factory=dict)  # source facts (alarm, deploy)
     replay: bool = False
     replay_original_time: str | None = None
+
+
+class DeployRecord(BaseModel):
+    """A successful deployment (SVC#<service> / DEPLOY#<endedAt>#<deployId>)."""
+
+    service: str
+    deployment_id: str
+    from_version: str
+    to_version: str
+    ended_at: str
+    application: str = ""
+    deployment_group: str = ""
 
 
 class SignalRef(BaseModel):
@@ -106,6 +120,7 @@ class Evidence(BaseModel):
     detail: str
     weight: float
     source_url: str | None = None
+    spoken: str | None = None  # read-aloud variant when `detail` has IDs (never read IDs aloud)
 
 
 class Summarizer(BaseModel):

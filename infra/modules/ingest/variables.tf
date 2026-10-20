@@ -46,6 +46,28 @@ variable "escalation_scheduler_role_arn" {
   type        = string
 }
 
+variable "prod_services" {
+  description = "Prod services whose alarms/deploys are ingested (deploy-proximity candidates)."
+  type        = list(string)
+  default     = []
+}
+
+variable "codedeploy_app" {
+  description = "CodeDeploy application whose deployment events are ingested."
+  type        = string
+}
+
+variable "deployment_group_arn" {
+  description = "Deployment group the normalizer may GetDeployment on."
+  type        = string
+}
+
+variable "alarm_name_prefix" {
+  description = "Only CloudWatch alarms with this name prefix are ingested."
+  type        = string
+  default     = "nightwatch-"
+}
+
 variable "log_retention_days" {
   description = "CloudWatch log retention."
   type        = number

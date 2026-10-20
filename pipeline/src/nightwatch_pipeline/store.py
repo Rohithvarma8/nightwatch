@@ -11,7 +11,14 @@ from pydantic import BaseModel
 
 from nightwatch_core import keys
 from nightwatch_core.ids import new_id
-from nightwatch_core.models import Contact, EscalationPolicy, Household, Incident, Signal
+from nightwatch_core.models import (
+    Contact,
+    DeployRecord,
+    EscalationPolicy,
+    Household,
+    Incident,
+    Signal,
+)
 
 SIGNAL_TTL = timedelta(days=7)
 RESOLVED_TTL = timedelta(days=30)
@@ -122,6 +129,25 @@ class Store:
                 **detail,
             }
         )
+
+    # --- deploys (prod correlation) ------------------------------------------
+    def put_deploy(self, record: DeployRecord) -> None:
+        self.table.put_item(
+            Item={
+                "PK": keys.service_pk(record.service),
+                "SK": keys.deploy_sk(record.ended_at, record.deployment_id),
+                "entity": "deploy",
+                **_attrs(record),
+            }
+        )
+
+    def deploys_between(self, service: str, start: str, end: str) -> list[DeployRecord]:
+        """Deploys of `service` that ended in [start, end] (ISO UTC)."""
+        resp = self.table.query(
+            KeyConditionExpression=Key("PK").eq(keys.service_pk(service))
+            & Key("SK").between(f"DEPLOY#{start}", f"DEPLOY#{end}#~")
+        )
+        return [DeployRecord.model_validate(i) for i in resp.get("Items", [])]
 
     # --- signals (dedupe + the record the builder and triage read) ---------
     def claim_signal(self, signal: Signal, now: datetime) -> bool:

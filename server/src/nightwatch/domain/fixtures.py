@@ -5,6 +5,7 @@ from datetime import datetime
 from nightwatch_core.models import (
     Contact,
     ContactChannels,
+    DeployRecord,
     EscalationPolicy,
     Evidence,
     Incident,
@@ -156,6 +157,9 @@ class FixtureSource:
 
     def add_event(self, incident_id: str, event_type: str, now: datetime, **detail: str) -> None:
         self.events.append((incident_id, event_type, detail))
+
+    def latest_deploy(self, service: str) -> DeployRecord | None:
+        return None
 
 
 class FixtureNotifier:

@@ -28,3 +28,23 @@ output "notify_topic_arn" {
   description = "SNS notification topic."
   value       = module.notify.topic_arn
 }
+
+output "checkout_url" {
+  description = "Demo checkout-service endpoint."
+  value       = module.demo_service.checkout_url
+}
+
+output "codedeploy_app" {
+  description = "CodeDeploy application (make bad-deploy / good-deploy)."
+  value       = module.demo_service.codedeploy_app
+}
+
+output "codedeploy_group" {
+  description = "CodeDeploy deployment group."
+  value       = module.demo_service.codedeploy_group
+}
+
+output "checkout_alarm" {
+  description = "p95 latency alarm name."
+  value       = module.demo_service.alarm_name
+}
