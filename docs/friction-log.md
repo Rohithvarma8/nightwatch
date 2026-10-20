@@ -199,6 +199,26 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
 
 ---
 
+### FL-011: CodeDeploy GetDeployment returns only the sha256 of an AppSpecContent revision, not its content
+
+- **Product / tool:** AWS CodeDeploy (Lambda compute platform), `GetDeployment`; EventBridge "CodeDeploy Deployment State-change Notification"
+- **Date:** 2026-10-20
+- **Task attempted:** Record which Lambda versions a deployment moved between (from → to) when its SUCCESS event arrives, to correlate a latency alarm with the deploy.
+- **Steps taken:**
+  1. The EventBridge event `detail` has `deploymentId`, `state`, `application` and `deploymentGroup`, but no versions.
+  2. Called `codedeploy.get_deployment(deploymentId=...)`, expecting the AppSpec we sent (`revisionType: AppSpecContent`, with `CurrentVersion`/`TargetVersion`) under `revision.appSpecContent.content`.
+- **Expected:** The revision content, or the versions somewhere in `deploymentInfo`.
+- **Actual:** `revision.appSpecContent` has only `sha256`, and `targetInstances` is null. Every SUCCESS event crashed the normalizer with `KeyError: 'content'`, so no deploy records were written. The first live alarm was therefore correlated without its deploy (severity moderate, no escalation timer).
+- **Severity:** Major (the core prod correlation silently had no deploy facts until found)
+- **Time lost:** ~30 minutes
+- **Workaround:** `ListDeploymentTargets` (one target, `checkout-service:live`) → `GetDeploymentTarget` → `deploymentTarget.lambdaTarget.lambdaFunctionInfo` has `functionName`, `functionAlias`, `currentVersion` and `targetVersion`. That needs IAM `codedeploy:ListDeploymentTargets` and `codedeploy:GetDeploymentTarget`. The normalizer fixtures are now the real event and API responses.
+- **Actionable suggestions:**
+  1. Include `currentVersion` / `targetVersion` (or the AppSpec content) in the Lambda deployment state-change event or in `GetDeployment`.
+  2. Document that `appSpecContent.content` isn't returned.
+- **Evidence:** `aws deploy get-deployment --deployment-id d-3869LHKLL` (revision has only `sha256`); `aws deploy get-deployment-target --deployment-id d-3869LHKLL --target-id checkout-service:live` (has the versions). Unsure whether this omission is documented; I couldn't find it stated.
+
+---
+
 ## Watch list (hypotheses to confirm or discard)
 - [ ] Docs say Builders support spec 2025-11-25, but the Alexa+ client `initialize` sends `protocolVersion: "2025-03-26"` (shown on the Client Lifecycle page). Record what you actually observe.
 - [ ] The "401 without `WWW-Authenticate`" requirement conflicts with the MCP auth spec / RFC 9728 guidance and with SDK/API Gateway defaults that add the header.

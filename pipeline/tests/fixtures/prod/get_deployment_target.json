@@ -1,0 +1,39 @@
+{
+    "deploymentTarget": {
+        "deploymentTargetType": "LambdaTarget",
+        "lambdaTarget": {
+            "deploymentId": "d-3869LHKLL",
+            "targetId": "checkout-service:live",
+            "targetArn": "arn:aws:lambda:us-west-2:946509368103:function:checkout-service:live",
+            "status": "Succeeded",
+            "lastUpdatedAt": "2026-10-20T15:04:16.584000-07:00",
+            "lifecycleEvents": [
+                {
+                    "lifecycleEventName": "BeforeAllowTraffic",
+                    "startTime": "2026-10-20T15:04:15.725000-07:00",
+                    "endTime": "2026-10-20T15:04:15.968000-07:00",
+                    "status": "Succeeded"
+                },
+                {
+                    "lifecycleEventName": "AllowTraffic",
+                    "startTime": "2026-10-20T15:04:15.970000-07:00",
+                    "endTime": "2026-10-20T15:04:16.267000-07:00",
+                    "status": "Succeeded"
+                },
+                {
+                    "lifecycleEventName": "AfterAllowTraffic",
+                    "startTime": "2026-10-20T15:04:16.480000-07:00",
+                    "endTime": "2026-10-20T15:04:16.571000-07:00",
+                    "status": "Succeeded"
+                }
+            ],
+            "lambdaFunctionInfo": {
+                "functionName": "checkout-service",
+                "functionAlias": "live",
+                "currentVersion": "2",
+                "targetVersion": "3",
+                "targetVersionWeight": 1.0
+            }
+        }
+    }
+}

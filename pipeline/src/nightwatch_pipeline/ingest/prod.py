@@ -3,8 +3,9 @@
 
 - Alarm → ALARM is an "Alert", → OK a "Cancel" (resolves the incident). INSUFFICIENT_DATA ignored.
 - Deploy SUCCESS → a deploy signal (the builder stores SVC#/DEPLOY# and uses it for proximity).
-  The event has no versions, so they come from GetDeployment's AppSpec (CurrentVersion →
-  TargetVersion).
+  The event has no versions, and GetDeployment returns only the AppSpec's sha256 (not its
+  content), so versions come from the deployment target: ListDeploymentTargets →
+  GetDeploymentTarget → lambdaTarget.lambdaFunctionInfo (currentVersion → targetVersion).
 """
 
 import json
@@ -87,24 +88,20 @@ def normalize_alarm(
     )
 
 
-def appspec_versions(content: str) -> tuple[str, str, str]:
-    """(function name, from version, to version) from a Lambda AppSpec.
-
-    JSON only: `make bad-deploy` / `make good-deploy` / rollback_deploy all send JSON AppSpecs.
-    """
-    spec = json.loads(content)
-    (resource,) = [next(iter(r.values())) for r in spec["Resources"]]
-    props = resource["Properties"]
-    return props["Name"], str(props["CurrentVersion"]), str(props["TargetVersion"])
-
-
 def normalize_deploy(
-    event: dict[str, Any], info: dict[str, Any], household_id: str, observed_at: datetime
+    event: dict[str, Any],
+    info: dict[str, Any],
+    lambda_target: dict[str, Any],
+    household_id: str,
+    observed_at: datetime,
 ) -> Signal | None:
+    """`info` = GetDeployment deploymentInfo; `lambda_target` = GetDeploymentTarget
+    deploymentTarget.lambdaTarget (has lambdaFunctionInfo with the versions)."""
     d = event["detail"]
     if d["state"] != "SUCCESS":
         return None
-    service, from_v, to_v = appspec_versions(info["revision"]["appSpecContent"]["content"])
+    fn = lambda_target["lambdaFunctionInfo"]
+    service, from_v, to_v = fn["functionName"], str(fn["currentVersion"]), str(fn["targetVersion"])
     ended = info.get("completeTime") or parse_aws_time(event["time"])
     ended = ended if isinstance(ended, datetime) else parse_aws_time(str(ended))
     region = event.get("region", "us-west-2")
@@ -156,8 +153,13 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     elif event.get("source") == "aws.codedeploy":
         if event["detail"]["state"] != "SUCCESS":
             return {"outcome": f"ignored {event['detail']['state']}"}
-        info = codedeploy.get_deployment(deploymentId=event["detail"]["deploymentId"])
-        signal = normalize_deploy(event, info["deploymentInfo"], household_id, now)
+        dep = event["detail"]["deploymentId"]
+        info = codedeploy.get_deployment(deploymentId=dep)["deploymentInfo"]
+        (target_id,) = codedeploy.list_deployment_targets(deploymentId=dep)["targetIds"]
+        target = codedeploy.get_deployment_target(deploymentId=dep, targetId=target_id)
+        signal = normalize_deploy(
+            event, info, target["deploymentTarget"]["lambdaTarget"], household_id, now
+        )
     else:
         return {"outcome": "ignored source"}
     if signal is None:

@@ -31,8 +31,13 @@ def alarm(name: str = "alarm_alarm") -> Signal:
 
 
 def deploy(**attrs: str) -> Signal:
-    s = normalize_deploy(event("deploy_success"), event("get_deployment")["deploymentInfo"],
-                         "hh_demo", NOW)  # fmt: skip
+    s = normalize_deploy(
+        event("deploy_success"),
+        event("get_deployment")["deploymentInfo"],
+        event("get_deployment_target")["deploymentTarget"]["lambdaTarget"],
+        "hh_demo",
+        NOW,
+    )
     assert s is not None
     return s.model_copy(update=attrs)
 
@@ -45,13 +50,13 @@ def test_alarm_to_signal() -> None:
     assert (s.source, s.kind, s.hazard_family) == ("cloudwatch", "prod", "prod")
     assert s.event == "checkout-service latency" and s.area == "checkout-service"
     assert s.message_type == "Alert" and s.severity == "moderate"
-    assert s.sent_at == "2026-10-20T01:20:00Z"
-    assert s.external_id == "nightwatch-checkout-latency-p95#2026-10-20T01:20:00.123+0000"
+    assert s.sent_at == "2026-10-20T22:06:21Z"
+    assert s.external_id == "nightwatch-checkout-latency-p95#2026-10-20T22:06:21.097+0000"
     assert s.attributes == {
         "alarm_name": "nightwatch-checkout-latency-p95", "state": "ALARM", "metric": "Duration",
         "statistic": "p95", "threshold": "500", "period_s": "60",
     }  # fmt: skip
-    assert "1043.2" in s.headline and "500.0" in s.headline  # grounding source has the numbers
+    assert "1008.07" in s.headline and "500.0" in s.headline  # grounding source has the numbers
 
 
 def test_ok_is_a_cancel_and_insufficient_data_is_ignored() -> None:
@@ -62,16 +67,22 @@ def test_ok_is_a_cancel_and_insufficient_data_is_ignored() -> None:
 def test_deploy_success_to_signal_with_versions() -> None:
     d = deploy()
     assert (d.source, d.kind, d.area) == ("codedeploy", "prod", "checkout-service")
-    assert d.external_id == "d-ABCDEF123" and d.sent_at == "2026-10-20T01:16:29Z"
-    assert d.attributes["from_version"] == "3" and d.attributes["to_version"] == "4"
+    assert d.external_id == "d-3869LHKLL" and d.sent_at == "2026-10-20T22:04:16Z"
+    assert d.attributes["from_version"] == "2" and d.attributes["to_version"] == "3"
     assert d.headline == (
-        "Deployment d-ABCDEF123 of checkout-service from version 3 to 4 succeeded."
+        "Deployment d-3869LHKLL of checkout-service from version 2 to 3 succeeded."
     )
+
+
+def test_real_bad_deploy_is_two_minutes_before_real_alarm() -> None:
+    p = rules.deploy_proximity(alarm(), [deploy()])
+    assert p is not None and p.minutes == 2
 
 
 def test_deploy_start_is_ignored() -> None:
     info = event("get_deployment")["deploymentInfo"]
-    assert normalize_deploy(event("deploy_start"), info, "hh_demo", NOW) is None
+    target = event("get_deployment_target")["deploymentTarget"]["lambdaTarget"]
+    assert normalize_deploy(event("deploy_start"), info, target, "hh_demo", NOW) is None
 
 
 # --- deploy-proximity rule ------------------------------------------------------------------
@@ -104,12 +115,12 @@ def test_derive_prod_with_proximity() -> None:
     assert d.title == "checkout-service latency" and d.severity == "high" and d.status == "open"
     ev = {e.type: e for e in d.evidence}
     assert ev["deploy_proximity"].detail == (
-        "Latency rose 4 minutes after deployment d-ABCDEF123 (v3→v4); no other service changed"
+        "Latency rose 4 minutes after deployment d-3869LHKLL (v2→v3); no other service changed"
     )
     assert ev["deploy_proximity"].spoken == (
-        "Latency rose 4 minutes after a deploy from version 3 to 4"
+        "Latency rose 4 minutes after a deploy from version 2 to 3"
     )
-    assert "d-ABCDEF123" not in (ev["deploy_proximity"].spoken or "")
+    assert "d-3869LHKLL" not in (ev["deploy_proximity"].spoken or "")
 
 
 def test_derive_prod_without_deploy_stays_moderate() -> None:
@@ -133,9 +144,9 @@ def test_alarm_after_deploy_makes_high_prod_incident(store, aws) -> None:
     )
     dep = _ingest(store, _at(deploy(), 4))
     assert process_signal(store, dep, NOW)[0] == "deploy_recorded"
-    rec = store.deploys_between("checkout-service", "2026-10-20T00:00:00Z", "2026-10-20T02:00:00Z")
+    rec = store.deploys_between("checkout-service", "2026-10-20T21:00:00Z", "2026-10-20T23:00:00Z")
     assert [(r.deployment_id, r.from_version, r.to_version) for r in rec] == [
-        ("d-ABCDEF123", "3", "4")
+        ("d-3869LHKLL", "2", "3")
     ]
 
     outcome, _ = process_signal(
@@ -148,9 +159,9 @@ def test_alarm_after_deploy_makes_high_prod_incident(store, aws) -> None:
     assert "deploy_proximity" in [e.type for e in inc.evidence]
     assert inc.spoken_summary == (
         "checkout-service latency rose above its alarm threshold 4 minutes after a deploy from "
-        "version 3 to 4."
+        "version 2 to 3."
     )
-    assert "d-ABCDEF123" not in inc.spoken_summary
+    assert "d-3869LHKLL" not in inc.spoken_summary
     assert inc.escalation_schedule_name  # high → escalation timer
     assert {r.source for r in inc.signals} == {"cloudwatch", "codedeploy"}
 

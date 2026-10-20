@@ -330,8 +330,8 @@ data "aws_iam_policy_document" "prod" {
   }
 
   statement {
-    sid       = "DeploymentVersions"
-    actions   = ["codedeploy:GetDeployment"]
+    sid       = "DeploymentVersions" # GetDeployment has no versions; the Lambda target does
+    actions   = ["codedeploy:GetDeployment", "codedeploy:ListDeploymentTargets", "codedeploy:GetDeploymentTarget"]
     resources = [var.deployment_group_arn]
   }
 

@@ -1,1 +1,43 @@
-{"deploymentInfo": {"applicationName": "checkout-service", "deploymentGroupName": "checkout-service", "deploymentId": "d-ABCDEF123", "status": "Succeeded", "completeTime": "2026-10-20T01:16:29.512000+00:00", "revision": {"revisionType": "AppSpecContent", "appSpecContent": {"content": "{\"version\": 0.0, \"Resources\": [{\"checkout\": {\"Type\": \"AWS::Lambda::Function\", \"Properties\": {\"Name\": \"checkout-service\", \"Alias\": \"live\", \"CurrentVersion\": \"3\", \"TargetVersion\": \"4\"}}}]}", "sha256": "x"}}}}
+{
+    "deploymentInfo": {
+        "applicationName": "checkout-service",
+        "deploymentGroupName": "checkout-service",
+        "deploymentConfigName": "CodeDeployDefault.LambdaAllAtOnce",
+        "deploymentId": "d-3869LHKLL",
+        "previousRevision": {
+            "revisionType": "AppSpecContent",
+            "appSpecContent": {
+                "sha256": "6769e6ceed6d8e4f0324d0ad4bd343a91bbf1eab2ee642cdc6d9dcf965ae9b0a"
+            }
+        },
+        "revision": {
+            "revisionType": "AppSpecContent",
+            "appSpecContent": {
+                "sha256": "1d386517bc7a8ece9ae74bd35fffab674f90b81f40b1eed05f8cf0dd700bef18"
+            }
+        },
+        "status": "Succeeded",
+        "createTime": "2026-10-20T15:04:14.726000-07:00",
+        "completeTime": "2026-10-20T15:04:16.736000-07:00",
+        "deploymentOverview": {
+            "Pending": 0,
+            "InProgress": 0,
+            "Succeeded": 1,
+            "Failed": 0,
+            "Skipped": 0,
+            "Ready": 0
+        },
+        "description": "bad deploy: v2 -> v3",
+        "creator": "user",
+        "ignoreApplicationStopFailures": false,
+        "updateOutdatedInstancesOnly": false,
+        "deploymentStyle": {
+            "deploymentType": "BLUE_GREEN",
+            "deploymentOption": "WITH_TRAFFIC_CONTROL"
+        },
+        "instanceTerminationWaitTimeStarted": false,
+        "fileExistsBehavior": "DISALLOW",
+        "deploymentStatusMessages": [],
+        "computePlatform": "Lambda"
+    }
+}
