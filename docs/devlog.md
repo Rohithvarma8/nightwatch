@@ -19,3 +19,18 @@
 - Added contacts and an escalation policy (Priya, alias "roommate"; high and above; the demo household's ack timeout is 120 s), the notifier Lambda (SNS → ntfy push with a 3 s timeout + SES email; SMS is a stub), and the escalation timer. The builder creates a one-time Scheduler schedule (deletes itself after it fires) for new high-severity incidents. When it fires, the escalation Lambda escalates only incidents that are still open. New MCP tools: `acknowledge`, `notify_contact` and `escalate` (DynamoDB UpdateItem on `INC#`/`RATE#` + SNS publish).
 - Live checks: (a) replay with no acknowledgement → the schedule fired 24 s after its due time and the escalation went out by push and email 3 s later; (b) replay then `acknowledge` → the timer logged `noop: acknowledged` and nothing was sent; (c) `notify_contact "roommate"` → Priya was notified by push and email. Warm round trips: acknowledge 0.17–0.27 s, notify_contact 0.24–0.26 s (rate-limited calls 0.17–0.23 s), escalate 0.18–0.44 s; handlers 18–100 ms (SNS adds ~40–80 ms).
 - Seen while verifying: the replay's triage fell back to the template once (Nova put days and times in replay text; strict mode rejected it as designed, and Haiku is still waiting on the use-case form). Revisit triage quality after Day 5.
+
+### 2026-10-20 · Day 6: on-call source (real deploys, real alarm)
+- `checkout-service` (Lambda behind its own HTTP API, `live` alias) gets real CodeDeploy deploys (AllAtOnce, no automatic rollback); the bad version sleeps ~900 ms on ~30% of requests. The load generator sends ~20 requests/min; the p95 alarm alarms on 2 of 3 one-minute periods above 500 ms. Alarm and deploy events go through the normalizer to Signals; the builder stores `SVC#`/`DEPLOY#` records and attaches recent deploys; `rules.deploy_proximity` makes it a **high** prod incident whose top action is rollback. `rollback_deploy` is shipped.
+- Timings (load generator running; baseline p95 ≈ 130–147 ms, bad p95 ≈ 1000 ms):
+
+  | Transition | Command → state change | After the deploy finished |
+  |---|---|---|
+  | Bad deploy → ALARM (1st, d-3869LHKLL v2→v3) | 2 min 18 s | 1 min 51 s |
+  | Rollback (`make good-deploy`, d-LUXLZ5KLL v3→v4) → OK | **2 min 49 s** | 2 min 21 s |
+  | Bad deploy → ALARM (d-RHIE8LKLL v4→v5) | **2 min 37 s** | 2 min 10 s |
+  | `rollback_deploy` (voice, d-D0VXHZLLL v5→v4) → OK | **2 min 19 s** | 2 min 02 s |
+
+  ALARM → incident took under 1 s; with no acknowledgement, the escalation push and email arrived 2 min 35 s after ALARM (the 120 s timeout plus Scheduler delay).
+- Found live and fixed: GetDeployment doesn't return the AppSpec content (FL-011), so the versions now come from GetDeploymentTarget; `rollback_deploy` blamed the earlier rollback inside the window (it now blames the newest deploy); Nova's actions replaced the rollback (the rules now pin it as the first action).
+- Cost and recording: the load generator is about $1.75/month and is now **off** (`loadgen_enabled = false` in tfvars). Before recording, set it to true, `terraform apply`, wait about 5 minutes for a baseline, then `make bad-deploy`; expect ALARM about 2.5 minutes later. `live` is on the good v4.
