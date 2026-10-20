@@ -4,7 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from nightwatch.domain.incidents import sentence, spoken_title
+from nightwatch.domain.incidents import sentence, spoken_title, to_view
+from nightwatch.domain.models import IncidentView
 from nightwatch_core.models import Incident
 
 Depth = Literal["brief", "full"]
@@ -56,6 +57,7 @@ class Explanation(BaseModel):
     sources: list[str]
     replay: bool
     replay_original_time: str | None
+    incident: IncidentView  # the card's view of this incident (severity, status, countdown)
 
 
 def _meaning_key(incident: Incident) -> str:
@@ -111,6 +113,7 @@ def explain(incident: Incident, depth: Depth) -> Explanation:
         sources=sorted({_SOURCE_NAMES.get(r.source, r.source) for r in incident.signals}),
         replay=incident.replay,
         replay_original_time=incident.replay_original_time,
+        incident=to_view(incident),
     )
 
 
