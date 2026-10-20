@@ -168,9 +168,8 @@ resource "aws_codedeploy_deployment_group" "checkout" {
     deployment_option = "WITH_TRAFFIC_CONTROL"
   }
 
-  auto_rollback_configuration {
-    enabled = false
-  }
+  # No auto_rollback_configuration: automatic rollback stays off (we want the alarm to fire).
+  # (A disabled block isn't stored by AWS, so declaring it shows a diff on every plan.)
 }
 
 # --- p95 latency alarm on the live alias ---------------------------------------------------
