@@ -219,6 +219,27 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
 
 ---
 
+### FL-012: MCP Python SDK only advertises the Apps extension capability on the 2026-07-28 wire
+
+- **Product / tool:** MCP Python SDK `mcp==2.3.0` (`mcp.server.apps.Apps`, `MCPServer(extensions=[...])`)
+- **Date:** 2026-10-20
+- **Task attempted:** Attach the MCP Apps incident card (`ui://nightwatch/incidents.html`) to two tools and advertise MCP Apps support to clients that `initialize` with `2025-03-26` (what Alexa+ has been documented sending) or `2025-11-25`.
+- **Steps taken:**
+  1. Built `apps = Apps()`, bound `get_active_incidents` and `explain_incident` with `@apps.tool(resource_uri=...)`, registered the HTML with `apps.add_html_resource(...)`, and passed `MCPServer(..., extensions=[apps])`.
+  2. POSTed `initialize` with `protocolVersion` `2025-03-26` and then `2025-11-25`.
+  3. Read `mcp/server/lowlevel/server.py` (`get_capabilities` sets `extensions=self.extensions`) and `mcp_types`: `ServerCapabilities.extensions` exists only in `mcp_types/_v2026_07_28`, not in `_v2025_11_25`.
+- **Expected:** `result.capabilities.extensions["io.modelcontextprotocol/ui"]` present, or a documented note that it is dropped on older protocol versions.
+- **Actual:** Both versions return `{"prompts": {...}, "resources": {...}, "tools": {...}}` with no `extensions` key, and no warning. The field is silently removed when the result is serialized for the negotiated version. Tool `_meta.ui.resourceUri`, `resources/list` (`mimeType: text/html;profile=mcp-app`) and `resources/read` work at both versions.
+- **Severity:** Minor
+- **Time lost:** ~20 min
+- **Workaround:** None needed for discovery: per the MCP Apps spec (2026-01-26), hosts find the UI from the tool's `_meta.ui.resourceUri`. A contract test (`test_card_reaches_pre_2026_clients`) asserts the tool `_meta` and the resource at both versions, so a host that keys on the tool `_meta` works. Unsure whether the Alexa+ client also requires the server capability; that's unconfirmed until we have Alexa+ access.
+- **Actionable suggestions:**
+  1. Document in `mcp.server.apps` that the server capability is only advertised to clients that negotiate 2026-07-28, and what older clients should rely on.
+  2. Log a debug line when the SDK drops a populated `extensions` map for an older protocol version.
+- **Evidence:** `initialize` responses for both versions (in-process ASGI app, `make run` equivalent); `grep -n extensions mcp_types/_v2026_07_28/__init__.py` (line 2054) vs no match in `mcp_types/_v2025_11_25`.
+
+---
+
 ## Watch list (hypotheses to confirm or discard)
 - [ ] Docs say Builders support spec 2025-11-25, but the Alexa+ client `initialize` sends `protocolVersion: "2025-03-26"` (shown on the Client Lifecycle page). Record what you actually observe.
 - [ ] The "401 without `WWW-Authenticate`" requirement conflicts with the MCP auth spec / RFC 9728 guidance and with SDK/API Gateway defaults that add the header.
@@ -226,6 +247,7 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
 - [ ] Tools refresh only on `alexa-ai deploy`, with no warning when the server's `tools/list` has drifted.
 - [ ] Auth metadata cached at deploy time: changing auth settings silently has no effect until redeploy.
 - [ ] Manifest needs 6 icon sizes + a 600×900 carousel image just to deploy to the dev stage.
+- [ ] Does the Alexa+ client require `capabilities.extensions["io.modelcontextprotocol/ui"]` from the server, or only tool `_meta.ui.resourceUri`? (FL-012)
 - [ ] The Quickstart's "MCP Apps standard" link points to the transports section of the spec, not the Apps extension.
 - [ ] Does the Alexa+ client send an `Origin` header? Any non-allowed Origin gets 403 from the SDK's DNS-rebinding check (FL-005).
 - [ ] Web simulator: what's visible in "response details" (tool calls? latency? raw payloads?) and what's missing for debugging.
