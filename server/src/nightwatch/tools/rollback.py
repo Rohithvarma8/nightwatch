@@ -71,7 +71,11 @@ def register(server: MCPServer, source: IncidentSource, deployer: Deployer | Non
         incident = resolve_incident(source, now, incident_id, reference or "deploy")
         if isinstance(incident, CallToolResult):
             return incident
-        blamed = next((r.external_id for r in incident.signals if r.source == "codedeploy"), None)
+        # The newest attached deploy is the one deploy_proximity blames (rules.deploy_proximity
+        # picks the latest deploy of the service in the window). Earlier deploys in the window
+        # (e.g. a previous rollback) are context, not the cause.
+        deploys = [r for r in incident.signals if r.source == "codedeploy"]
+        blamed = max(deploys, key=lambda r: r.observed_at).external_id if deploys else None
         service = incident.area_name or ""
         latest: DeployRecord | None = source.latest_deploy(service) if service else None
         if incident.kind != "prod" or blamed is None or latest is None:

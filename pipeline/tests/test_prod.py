@@ -188,3 +188,28 @@ def test_prod_and_home_hazards_never_merge(store) -> None:
     assert kinds == ["hazard", "prod"]
     prod = next(i for i in store.list_active("hh_demo") if i.kind == "prod")
     assert all(e.type in {"alarm", "deploy_proximity"} for e in prod.evidence)
+
+
+def test_ai_actions_never_replace_the_rollback(store) -> None:
+    from nightwatch_pipeline.triage.handler import run
+
+    dep = _ingest(store, _at(deploy(), 2))
+    process_signal(store, dep, NOW)
+    process_signal(store, _ingest(store, alarm()), NOW, None, ["checkout-service"])
+    (inc,) = store.list_active("hh_demo")
+    reply = {
+        "spoken_summary": "Checkout service latency is above 500 ms after a deployment.",
+        "detail_summary": "The p95 latency alarm crossed 500.0 after the deployment.",
+        "recommended_actions": ["Monitor checkout service latency", "Roll back if it persists"],
+    }
+
+    def invoke(model_id, system, prompt, timeout_s):
+        return json.dumps(reply)
+
+    assert run(store, inc.id, inc.content_hash, ["amazon.nova-lite-v1:0"], invoke)["saved"]
+    saved = store.get_incident(inc.id)
+    assert saved.recommended_actions == [
+        "Roll back the latest deploy",
+        "Monitor checkout service latency",
+    ]
+    assert saved.spoken_summary == reply["spoken_summary"]

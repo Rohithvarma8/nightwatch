@@ -274,3 +274,22 @@ async def test_rollback_refuses_without_linked_deploy(table) -> None:
     async with connect(deployer) as client:
         result = await client.call_tool("rollback_deploy", {"confirm": True})
     assert result.is_error and deployer.calls == []
+
+
+async def test_rollback_blames_newest_attached_deploy(table) -> None:
+    """Live bug: an earlier rollback inside the window was 'blamed', so it refused."""
+    inc = _prod_incident(deploy_id="d-BAD")
+    earlier = inc.signals[1].model_copy(
+        update={
+            "external_id": "d-EARLIER-ROLLBACK",
+            "observed_at": (NOW - timedelta(minutes=9)).strftime(ISO),
+        }
+    )
+    _put(table, inc.model_copy(update={"signals": [inc.signals[0], earlier, inc.signals[1]]}))
+    _deploy(table, "d-EARLIER-ROLLBACK", "3", "4", 9)
+    _deploy(table, "d-BAD", "4", "5", 4)
+    deployer = FakeDeployer()
+    async with connect(deployer) as client:
+        result = await client.call_tool("rollback_deploy", {"confirm": True})
+    assert not result.is_error, result.content
+    assert deployer.calls == [("checkout-service", "5", "4")]

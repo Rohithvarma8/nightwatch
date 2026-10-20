@@ -1,1 +1,48 @@
-{"version": "0", "id": "c4c1c1c9-6542-e61b-6ef0-8c4d36933a92", "detail-type": "CloudWatch Alarm State Change", "source": "aws.cloudwatch", "account": "946509368103", "time": "2026-10-20T22:20:00Z", "region": "us-west-2", "resources": ["arn:aws:cloudwatch:us-west-2:946509368103:alarm:nightwatch-checkout-latency-p95"], "detail": {"alarmName": "nightwatch-checkout-latency-p95", "state": {"value": "OK", "reason": "Threshold Crossed: 3 datapoints [142.1 (20/10/26 01:31:00), 138.0 (20/10/26 01:30:00), 150.7 (20/10/26 01:29:00)] were not greater than the threshold (500.0).", "reasonData": "{\"threshold\":500.0}", "timestamp": "2026-10-20T22:20:00.000+0000"}, "previousState": {"value": "ALARM", "reason": "Threshold Crossed: 2 out of the last 3 datapoints [1043.2 (20/10/26 01:19:00), 1012.5 (20/10/26 01:18:00)] were greater than the threshold (500.0) (minimum 2 datapoints for OK -> ALARM transition).", "timestamp": "2026-10-20T01:20:00.123+0000"}, "configuration": {"description": "checkout-service p95 latency on the live alias is above 500 ms.", "metrics": [{"id": "m1", "metricStat": {"metric": {"namespace": "AWS/Lambda", "name": "Duration", "dimensions": {"FunctionName": "checkout-service", "Resource": "checkout-service:live"}}, "period": 60, "stat": "p95"}, "returnData": true}]}}}
+{
+ "version": "0",
+ "id": "98406ba4-2d63-e63f-fd09-5e2b1f1e1301",
+ "detail-type": "CloudWatch Alarm State Change",
+ "source": "aws.cloudwatch",
+ "account": "946509368103",
+ "time": "2026-10-20T22:33:21Z",
+ "region": "us-west-2",
+ "resources": [
+  "arn:aws:cloudwatch:us-west-2:946509368103:alarm:nightwatch-checkout-latency-p95"
+ ],
+ "detail": {
+  "alarmName": "nightwatch-checkout-latency-p95",
+  "state": {
+   "value": "OK",
+   "reason": "Threshold Crossed: 2 out of the last 3 datapoints [142.62811754568477 (20/10/26 22:32:00), 142.04293198443193 (20/10/26 22:31:00)] were not greater than the threshold (500.0) (minimum 2 datapoints for ALARM -> OK transition).",
+   "reasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-20T22:33:21.096+0000\",\"startDate\":\"2026-10-20T22:30:00.000+0000\",\"statistic\":\"p95\",\"period\":60,\"recentDatapoints\":[1033.6451938652247,142.04293198443193,142.62811754568477],\"threshold\":500.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-20T22:32:00.000+0000\",\"sampleCount\":17.0,\"value\":142.62811754568477},{\"timestamp\":\"2026-10-20T22:31:00.000+0000\",\"sampleCount\":20.0,\"value\":142.04293198443193}]}",
+   "timestamp": "2026-10-20T22:33:21.097+0000"
+  },
+  "previousState": {
+   "value": "ALARM",
+   "reason": "Threshold Crossed: 2 out of the last 3 datapoints [985.5751286645991 (20/10/26 22:05:00), 1008.0738303649516 (20/10/26 22:04:00)] were greater than the threshold (500.0) (minimum 2 datapoints for OK -> ALARM transition).",
+   "reasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-20T22:06:21.096+0000\",\"startDate\":\"2026-10-20T22:03:00.000+0000\",\"statistic\":\"p95\",\"period\":60,\"recentDatapoints\":[145.5872463875764,1008.0738303649516,985.5751286645991],\"threshold\":500.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-20T22:05:00.000+0000\",\"sampleCount\":12.0,\"value\":985.5751286645991},{\"timestamp\":\"2026-10-20T22:04:00.000+0000\",\"sampleCount\":20.0,\"value\":1008.0738303649516}]}",
+   "timestamp": "2026-10-20T22:06:21.097+0000"
+  },
+  "configuration": {
+   "metrics": [
+    {
+     "id": "e4d0ada8-bcae-b711-66c6-5944a37e0ccd",
+     "metricStat": {
+      "metric": {
+       "namespace": "AWS/Lambda",
+       "name": "Duration",
+       "dimensions": {
+        "Resource": "checkout-service:live",
+        "FunctionName": "checkout-service"
+       }
+      },
+      "period": 60,
+      "stat": "p95"
+     },
+     "returnData": true
+    }
+   ],
+   "description": "checkout-service p95 latency on the live alias is above 500 ms."
+  }
+ }
+}

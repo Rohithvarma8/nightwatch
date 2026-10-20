@@ -11,7 +11,7 @@ from typing import Any
 from aws_lambda_powertools import Logger, Metrics
 from aws_lambda_powertools.metrics import MetricUnit
 
-from nightwatch_core.models import Summarizer
+from nightwatch_core.models import Incident, Summarizer
 from nightwatch_core.timefmt import spoken_until
 from nightwatch_pipeline import settings as settings_mod
 from nightwatch_pipeline.store import Store
@@ -28,6 +28,18 @@ def triage_models() -> list[str]:
         for m in (os.environ.get("TRIAGE_MODEL_ID"), os.environ.get("TRIAGE_FALLBACK_MODEL_ID"))
         if m
     ]
+
+
+ROLLBACK_ACTION = "Roll back the latest deploy"
+
+
+def pinned_actions(incident: Incident, fields: dict[str, Any]) -> dict[str, Any]:
+    """The rules decide the top action; the model only narrates. With deploy-proximity evidence
+    the first action is always the rollback (the model's own rollback wording is dropped)."""
+    if not any(e.type == "deploy_proximity" for e in incident.evidence):
+        return {}
+    ai = [a for a in fields.get("recommended_actions", []) if "roll" not in a.lower()]
+    return {"recommended_actions": [ROLLBACK_ACTION, *ai][:3]}
 
 
 def run(store: Store, incident_id: str, content_hash: str, models: list[str],
@@ -62,6 +74,7 @@ def run(store: Store, incident_id: str, content_hash: str, models: list[str],
     fields: dict[str, Any] = {"summarizer": summarizer.model_dump()}
     if result.fields is not None:
         fields |= result.fields
+        fields |= pinned_actions(incident, result.fields)
     saved = store.save_summary(incident_id, content_hash, fields)
     logger.info(
         "triage done",
