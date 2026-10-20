@@ -153,14 +153,17 @@ async def test_get_runbook(mcp_client: ClientFactory) -> None:
     assert result.content[0].text.startswith("For the checkout-service latency: first,")
 
 
-async def test_six_tools_listed(mcp_client: ClientFactory) -> None:
+async def test_seven_tools_listed(mcp_client: ClientFactory) -> None:
     async with mcp_client() as client:
         tools = {t.name: t for t in (await client.list_tools()).tools}
     assert sorted(tools) == [
         "acknowledge", "escalate", "explain_incident", "get_active_incidents", "get_runbook",
-        "notify_contact",
+        "notify_contact", "rollback_deploy",
     ]  # fmt: skip
     read_only = {n for n, t in tools.items() if t.annotations and t.annotations.read_only_hint}
     assert read_only == {"explain_incident", "get_active_incidents", "get_runbook"}
     ack = tools["acknowledge"].annotations
     assert ack is not None and ack.idempotent_hint is True and ack.destructive_hint is False
+    rb = tools["rollback_deploy"]
+    assert rb.annotations is not None and rb.annotations.destructive_hint is True
+    assert "confirm" in rb.input_schema["required"]

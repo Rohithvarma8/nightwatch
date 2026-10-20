@@ -1,0 +1,23 @@
+{
+ "version": "0",
+ "id": "986ce12d-200c-79c1-7c86-7618e64e1140",
+ "detail-type": "CodeDeploy Deployment State-change Notification",
+ "source": "aws.codedeploy",
+ "account": "946509368103",
+ "time": "2026-10-20T22:04:14Z",
+ "region": "us-west-2",
+ "resources": [
+  "arn:aws:codedeploy:us-west-2:946509368103:application:checkout-service",
+  "arn:aws:codedeploy:us-west-2:946509368103:deploymentgroup:checkout-service/checkout-service"
+ ],
+ "detail": {
+  "region": "us-west-2",
+  "deploymentId": "d-3869LHKLL",
+  "instanceGroupId": "e2f5240e-0f1a-4481-a646-3d48fc9ee472",
+  "deploymentGroup": "checkout-service",
+  "state": "START",
+  "creator": "user",
+  "updateOutdatedInstancesOnly": false,
+  "application": "checkout-service"
+ }
+}

@@ -7,7 +7,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp_types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
 
-from nightwatch.domain.incidents import IncidentSource, sentence, spoken_title
+from nightwatch.domain.incidents import IncidentSource, inline_title, sentence
 from nightwatch.domain.runbooks import Runbook, runbook_for
 from nightwatch.tools.common import error, resolve_incident
 
@@ -93,9 +93,9 @@ def register(server: MCPServer, source: IncidentSource, runbooks: dict[str, Runb
             return incident
         book = runbook_for(incident, runbooks)
         if book is None:
-            return error(f"I don't have a runbook for the {spoken_title(incident)} yet.")
+            return error(f"I don't have a runbook for the {inline_title(incident)} yet.")
         view = _view(book, incident.id, incident.title)
         return CallToolResult(
-            content=[TextContent(type="text", text=_spoken(view, spoken_title(incident).lower()))],
+            content=[TextContent(type="text", text=_spoken(view, inline_title(incident).lower()))],
             structured_content=view.model_dump(mode="json"),
         )

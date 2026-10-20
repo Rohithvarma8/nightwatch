@@ -32,6 +32,14 @@ def rate_pk(household_id: str, contact_id: str) -> str:
     return f"RATE#{household_id}#{contact_id}"
 
 
+def service_pk(service: str) -> str:
+    return f"SVC#{service}"
+
+
+def deploy_sk(ended_at: str, deployment_id: str) -> str:
+    return f"DEPLOY#{ended_at}#{deployment_id}"
+
+
 def signal_pk(source: str, external_id: str) -> str:
     return f"SIG#{source}#{external_id}"
 

@@ -23,7 +23,8 @@ def sentence(text: str) -> str:
 def notification(incident: Incident, tz: str, now: datetime, kind: Kind) -> tuple[str, str]:
     """(title, body). Title, place, until-time, top action, signature; replays are labeled."""
     label = f"{REPLAY_LABEL}: " if incident.replay else ""
-    what = incident.title + (f" for {incident.area_name}" if incident.area_name else "")
+    place = incident.area_name if incident.kind == "hazard" else None  # prod: area = service
+    what = incident.title + (f" for {place}" if place else "")
     until = spoken_until(incident.ends_at, tz, now) if incident.kind == "hazard" else None
     headline = f"{what} until {until}" if until else what
     parts = [f"{label}{sentence(headline)}"]

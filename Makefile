@@ -8,7 +8,7 @@ WARM_TFVARS := $(TF_DEV)/warm.auto.tfvars
 AWS_ENV := AWS_PROFILE=nightwatch AWS_DEFAULT_REGION=us-west-2
 TF_OUT   = terraform -chdir=$(CURDIR)/$(TF_DEV) output -raw
 
-.PHONY: setup lint test run inspect build deploy warm-on warm-off seed-household replay reset-incidents smoke
+.PHONY: setup lint test run inspect build deploy warm-on warm-off seed-household replay reset-incidents smoke bad-deploy good-deploy
 
 setup:  ## Install deps for shared/, pipeline/, server/ (uv)
 	for p in $(PACKAGES); do (cd $$p && uv sync --all-extras) || exit 1; done
@@ -31,6 +31,7 @@ build:  ## Lambda zips (aarch64 manylinux wheels) -> dist/{mcp_server,pipeline,t
 	scripts/build_lambda.sh server mcp_server nightwatch
 	scripts/build_lambda.sh pipeline pipeline nightwatch_pipeline
 	scripts/build_lambda.sh pipeline triage nightwatch_pipeline triage
+	scripts/build_demo.sh
 
 deploy: build  ## build + terraform apply (envs/dev) + print the MCP URL
 	terraform -chdir=$(TF_DEV) init -input=false
@@ -62,3 +63,9 @@ reset-incidents:  ## DEV ONLY: delete incidents, OPENKEYs, and signal records (k
 
 smoke:  ## Post-deploy smoke test: replay one alert end to end; fail on any builder/triage/notifier/escalation Lambda error
 	$(AWS_ENV) scripts/smoke.sh $(FILE)
+
+bad-deploy:  ## Deploy checkout-service with the latency regression (CodeDeploy, AllAtOnce); prints the deployment ID
+	scripts/deploy_checkout.sh bad
+
+good-deploy:  ## Deploy the good checkout-service version (this is the rollback)
+	scripts/deploy_checkout.sh good

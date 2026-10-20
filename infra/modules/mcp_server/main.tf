@@ -68,6 +68,37 @@ data "aws_iam_policy_document" "actions" {
   }
 }
 
+# rollback_deploy: one CreateDeployment on the demo service's deployment group (AppSpecContent
+# revision, AllAtOnce config). Nothing else in CodeDeploy.
+data "aws_iam_policy_document" "rollback" {
+  count = var.rollback == null ? 0 : 1
+
+  statement {
+    sid       = "StartRollback"
+    actions   = ["codedeploy:CreateDeployment"]
+    resources = [var.rollback.deployment_group_arn]
+  }
+
+  statement {
+    sid       = "RollbackRevision"
+    actions   = ["codedeploy:RegisterApplicationRevision", "codedeploy:GetApplicationRevision"]
+    resources = [var.rollback.app_arn]
+  }
+
+  statement {
+    sid       = "RollbackConfig"
+    actions   = ["codedeploy:GetDeploymentConfig"]
+    resources = ["${replace(var.rollback.app_arn, "/:application:.*/", "")}:deploymentconfig:CodeDeployDefault.LambdaAllAtOnce"]
+  }
+}
+
+resource "aws_iam_role_policy" "rollback" {
+  count  = var.rollback == null ? 0 : 1
+  name   = "rollback"
+  role   = aws_iam_role.this.id
+  policy = data.aws_iam_policy_document.rollback[0].json
+}
+
 resource "aws_iam_role_policy" "actions" {
   name   = "actions"
   role   = aws_iam_role.this.id
@@ -104,6 +135,8 @@ resource "aws_lambda_function" "this" {
       NIGHTWATCH_TABLE             = var.table_name
       HOUSEHOLD_ID                 = var.household_id
       NOTIFY_TOPIC_ARN             = var.notify_topic_arn
+      CODEDEPLOY_APP               = var.rollback == null ? "" : var.rollback.app
+      CODEDEPLOY_GROUP             = var.rollback == null ? "" : var.rollback.group
     }
   }
 

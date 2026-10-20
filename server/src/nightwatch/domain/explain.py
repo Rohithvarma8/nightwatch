@@ -116,7 +116,8 @@ def explain(incident: Incident, depth: Depth) -> Explanation:
 
 def spoken_explanation(incident: Incident, exp: Explanation) -> str:
     """Spoken answer to "why?": the summary, what it means, and the evidence. No IDs."""
-    because = "; ".join(e.detail for e in exp.evidence[:BRIEF_EVIDENCE])
+    spoken = {e.detail: e.spoken for e in incident.evidence if e.spoken}  # ID-free variants
+    because = "; ".join(spoken.get(e.detail, e.detail) for e in exp.evidence[:BRIEF_EVIDENCE])
     parts = [
         f"{spoken_title(incident)}. {sentence(incident.spoken_summary)}",
         exp.what_it_means_for_you,
