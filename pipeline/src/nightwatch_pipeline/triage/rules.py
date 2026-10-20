@@ -175,16 +175,23 @@ def apply_derived(
     """Recompute an incident from its signals. Keeps an AI summary written for the same content."""
     d = derive(signals, now)
     now_iso = to_utc_iso(now)
+    # Acknowledged / escalated are human (or escalation) decisions: only "resolved" overrides them.
+    status = (
+        d.status
+        if d.status == "resolved" or incident.status == "resolved"
+        else (incident.status if incident.status in ("acknowledged", "escalated") else "open")
+    )
     update: dict = {
         "title": d.title,
         "severity": d.severity,
-        "status": d.status,
+        "status": status,
+        "area_name": d.primary.area_name,
         "ends_at": d.ends_at,
         "evidence": d.evidence,
         "signals": d.refs,
         "content_hash": d.content_hash,
     }
-    if d.status == "resolved" and incident.status != "resolved":
+    if status == "resolved" and incident.status != "resolved":
         update["resolved_at"] = now_iso
     if d.content_hash != incident.content_hash:
         # Facts changed: deterministic template now, the triage agent rewrites it async.

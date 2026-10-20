@@ -26,5 +26,5 @@ def resolve_incident(
     if reference:
         return match_reference(ordered, reference) or error(not_found_message(reference, ordered))
     if not ordered:
-        return error("Nothing is active right now, so there's nothing to explain.")
+        return error("Nothing is active right now.")
     return ordered[0]

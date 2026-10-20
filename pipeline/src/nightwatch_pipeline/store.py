@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from nightwatch_core import keys
 from nightwatch_core.ids import new_id
-from nightwatch_core.models import Household, Incident, Signal
+from nightwatch_core.models import Contact, EscalationPolicy, Household, Incident, Signal
 
 SIGNAL_TTL = timedelta(days=7)
 RESOLVED_TTL = timedelta(days=30)
@@ -55,6 +55,73 @@ class Store:
             Key={"PK": keys.household_pk(household_id), "SK": keys.PROFILE}
         ).get("Item")
         return Household.model_validate(item) if item else None
+
+    # --- contacts + escalation policy ---------------------------------------
+    def put_contact(self, contact: Contact) -> None:
+        self.table.put_item(
+            Item={
+                "PK": keys.household_pk(contact.household_id),
+                "SK": keys.contact_sk(contact.id),
+                "entity": "contact",
+                **_attrs(contact),
+            }
+        )
+
+    def get_contact(self, household_id: str, contact_id: str) -> Contact | None:
+        item = self.table.get_item(
+            Key={"PK": keys.household_pk(household_id), "SK": keys.contact_sk(contact_id)}
+        ).get("Item")
+        return Contact.model_validate(item) if item else None
+
+    def put_policy(self, policy: EscalationPolicy) -> None:
+        self.table.put_item(
+            Item={
+                "PK": keys.household_pk(policy.household_id),
+                "SK": keys.ESCALATION_POLICY,
+                "entity": "policy",
+                **_attrs(policy),
+            }
+        )
+
+    def get_policy(self, household_id: str) -> EscalationPolicy | None:
+        item = self.table.get_item(
+            Key={"PK": keys.household_pk(household_id), "SK": keys.ESCALATION_POLICY}
+        ).get("Item")
+        return EscalationPolicy.model_validate(item) if item else None
+
+    def mark_escalated(self, incident_id: str, now: datetime) -> bool:
+        """open → escalated, atomically. False if acknowledged, resolved, or already escalated."""
+        at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        try:
+            self.table.update_item(
+                Key={"PK": keys.incident_pk(incident_id), "SK": keys.META},
+                UpdateExpression="SET #s = :esc, escalated_at = :at, updated_at = :at, "
+                "#v = #v + :one",
+                ConditionExpression="#s = :open",
+                ExpressionAttributeNames={"#s": "status", "#v": "version"},
+                ExpressionAttributeValues={
+                    ":esc": "escalated",
+                    ":open": "open",
+                    ":at": at,
+                    ":one": 1,
+                },
+            )
+        except self._client.exceptions.ConditionalCheckFailedException:
+            return False
+        return True
+
+    def add_event(self, incident_id: str, event_type: str, now: datetime, **detail: Any) -> None:
+        at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.table.put_item(
+            Item={
+                "PK": keys.incident_pk(incident_id),
+                "SK": keys.event_sk(at, new_id("evt")),
+                "entity": "incident_event",
+                "type": event_type,
+                "at": at,
+                **detail,
+            }
+        )
 
     # --- signals (dedupe + the record the builder and triage read) ---------
     def claim_signal(self, signal: Signal, now: datetime) -> bool:

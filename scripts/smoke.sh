@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Post-deploy smoke test (dev). Replays one archived alert through the real path
-# (bus → incident builder → triage → DynamoDB → MCP) and fails on any Lambda error.
+# (bus → incident builder → triage → DynamoDB → MCP) and fails on any Lambda error in the
+# builder, triage, notifier, or escalation logs (including per-channel "error: …" results).
 # Unit tests run against moto, which doesn't enforce IAM; this does.
 #   scripts/smoke.sh [alert.json]     (SMOKE_TIMEOUT_S, default 120)
 set -euo pipefail
@@ -9,7 +10,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FILE="${1:-$HOME/nightwatch-alert-archive/archive/nws/2026-10-15/b63ffdcd0a37ca41.json}"
 TIMEOUT="${SMOKE_TIMEOUT_S:-120}"
 AWS=(--profile nightwatch --region us-west-2)
-LOG_GROUPS=(/aws/lambda/nightwatch-incident-builder /aws/lambda/nightwatch-triage)
+LOG_GROUPS=(
+  /aws/lambda/nightwatch-incident-builder
+  /aws/lambda/nightwatch-triage
+  /aws/lambda/nightwatch-notifier
+  /aws/lambda/nightwatch-escalation
+)
+# Also look back over the last SMOKE_LOOKBACK_S (default 15 min) for notifier/escalation errors:
+# those Lambdas fire on their own schedule (escalation timers, async SNS delivery).
 MCP_URL="$(terraform -chdir="$ROOT/infra/envs/dev" output -raw mcp_url)"
 
 logs() {  # logs <group> <since-ms>: messages as JSON lines
@@ -19,13 +27,16 @@ logs() {  # logs <group> <since-ms>: messages as JSON lines
 }
 
 T0=$(( $(date +%s) * 1000 ))
+LOOKBACK=$(( T0 - ${SMOKE_LOOKBACK_S:-900} * 1000 ))
 echo "smoke: replaying $(basename "$FILE")"
 make -s -C "$ROOT" replay FILE="$FILE" | tail -1
 
 deadline=$(( $(date +%s) + TIMEOUT ))
 while :; do
   for g in "${LOG_GROUPS[@]}"; do
-    errors="$(logs "$g" "$T0" | grep -E '\[ERROR\]|Task timed out|AccessDenied' || true)"
+    since="$T0"
+    case "$g" in *notifier|*escalation) since="$LOOKBACK" ;; esac
+    errors="$(logs "$g" "$since" | grep -E '\[ERROR\]|Task timed out|AccessDenied|error: ' || true)"
     if [ -n "$errors" ]; then
       echo "FAIL: errors in $g:"; echo "$errors" | cut -c1-400; exit 1
     fi

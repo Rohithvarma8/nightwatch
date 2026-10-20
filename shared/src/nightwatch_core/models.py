@@ -28,7 +28,33 @@ class Household(BaseModel):
     forecast_zone: Zone
     fire_zone: Zone
     county: str | None = None  # NWS county zone, e.g. "CAC111"
-    ack_timeout_s: int = 300
+    ack_timeout_s: int = 600  # escalate high+ incidents not acknowledged within this
+
+
+class ContactChannels(BaseModel):
+    ntfy: bool = False  # push via the household's ntfy topic (SSM SecureString, not stored here)
+    email: str | None = None
+    sms: str | None = None  # stub: not delivered (US SMS needs a registered origination ID)
+
+
+class Contact(BaseModel):
+    id: str
+    household_id: str
+    name: str
+    aliases: list[str] = Field(default_factory=list)  # "roommate", "mom"
+    channels: ContactChannels = Field(default_factory=ContactChannels)
+    escalation_order: int = 0
+
+    @property
+    def channel_names(self) -> list[str]:
+        """Spoken-friendly channel list ("push", "email"); SMS is a stub, so never listed."""
+        return [n for n, on in (("push", self.channels.ntfy), ("email", self.channels.email)) if on]
+
+
+class EscalationPolicy(BaseModel):
+    household_id: str
+    min_severity: "Severity" = "high"
+    contact_ids: list[str] = Field(default_factory=list)  # notified in order; first = escalation
 
 
 class Signal(BaseModel):
@@ -115,6 +141,9 @@ class Incident(BaseModel):
     acked_by: str | None = None
     acked_at: str | None = None
     escalation_schedule_name: str | None = None
+    escalation_due_at: str | None = None
+    escalated_at: str | None = None
+    area_name: str | None = None  # place name from the primary signal (for messages)
     replay: bool = False
     replay_original_time: str | None = None
     summarizer: Summarizer

@@ -8,10 +8,10 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from nightwatch import settings as settings_mod
-from nightwatch.domain.fixtures import FixtureSource
-from nightwatch.domain.incidents import IncidentSource
+from nightwatch.domain.fixtures import FixtureNotifier, FixtureSource
+from nightwatch.domain.incidents import IncidentSource, Notifier
 from nightwatch.domain.runbooks import load_runbooks
-from nightwatch.tools import explain, incidents, runbooks
+from nightwatch.tools import actions, explain, incidents, runbooks
 
 MCP_PATH = "/mcp"
 # The SDK's defaults when host="127.0.0.1"; kept so `make run` and the Inspector keep working.
@@ -47,7 +47,15 @@ def incident_source(cfg: settings_mod.Settings) -> IncidentSource:
     return DynamoIncidentSource(cfg.table_name, cfg.household_id)
 
 
-def create_server(source: IncidentSource) -> MCPServer:
+def notifier_for(cfg: settings_mod.Settings) -> Notifier:
+    if not cfg.notify_topic_arn:
+        return FixtureNotifier()  # local dev / tests: nothing leaves the process
+    from nightwatch.store.notify import SnsNotifier
+
+    return SnsNotifier(cfg.notify_topic_arn)
+
+
+def create_server(source: IncidentSource, notifier: Notifier) -> MCPServer:
     server = MCPServer(
         name="nightwatch",
         title="Night Watch",
@@ -57,6 +65,7 @@ def create_server(source: IncidentSource) -> MCPServer:
     incidents.register(server, source)
     explain.register(server, source)
     runbooks.register(server, source, load_runbooks())  # read once at init, no per-request I/O
+    actions.register(server, source, notifier)
     server.custom_route("/healthz", methods=["GET"], include_in_schema=False)(healthz)
     return server
 
@@ -78,7 +87,7 @@ def transport_security(allowed_hosts: str) -> TransportSecuritySettings:
 def create_app() -> tuple[Starlette, ASGIApp]:
     """Return (mcp_app, asgi). mcp_app owns the lifespan; asgi is what uvicorn serves."""
     cfg = settings_mod.load()
-    mcp_app = create_server(incident_source(cfg)).streamable_http_app(
+    mcp_app = create_server(incident_source(cfg), notifier_for(cfg)).streamable_http_app(
         streamable_http_path=MCP_PATH,
         stateless_http=True,
         json_response=True,

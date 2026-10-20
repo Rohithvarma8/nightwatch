@@ -2,7 +2,16 @@
 
 from datetime import datetime
 
-from nightwatch_core.models import Evidence, Incident, SignalRef, Summarizer
+from nightwatch_core.models import (
+    Contact,
+    ContactChannels,
+    EscalationPolicy,
+    Evidence,
+    Incident,
+    SignalRef,
+    Summarizer,
+)
+from nightwatch_core.timefmt import to_utc_iso
 
 _TEMPLATE = Summarizer(model="template-v1", latency_ms=0, fallback_used=False)
 
@@ -41,6 +50,8 @@ FIXTURE_INCIDENTS: list[Incident] = [
         ),
         detail_summary="Red Flag Warning issued October 21 until October 21 at 6:00PM PDT.",
         recommended_actions=["Keep windows closed"],
+        area_name="Southeastern Ventura County Valleys",
+        escalation_due_at="2099-01-01T00:00:00Z",
         summarizer=_TEMPLATE,
     ),
     Incident(
@@ -81,12 +92,76 @@ FIXTURE_INCIDENTS: list[Incident] = [
 ]
 
 
+FIXTURE_CONTACTS = [
+    Contact(
+        id="c_priya",
+        household_id="hh_demo",
+        name="Priya",
+        aliases=["roommate"],
+        channels=ContactChannels(ntfy=True, email="priya@example.com"),
+        escalation_order=1,
+    )
+]
+
+
 class FixtureSource:
+    """In-memory source for tests and `make run` without a table. Writes stay in memory."""
+
+    def __init__(self) -> None:
+        self.incidents = {i.id: i.model_copy() for i in FIXTURE_INCIDENTS}
+        self.events: list[tuple[str, str, dict[str, str]]] = []
+        self.slots: dict[str, int] = {}
+
     def household_name(self) -> str:
         return "Demo Household"
 
+    def household_tz(self) -> str:
+        return "America/Los_Angeles"
+
+    def contacts(self) -> list[Contact]:
+        return FIXTURE_CONTACTS
+
+    def escalation_policy(self) -> EscalationPolicy | None:
+        return EscalationPolicy(household_id="hh_demo", contact_ids=["c_priya"])
+
     def active_incidents(self, now: datetime) -> list[Incident]:
-        return FIXTURE_INCIDENTS
+        return list(self.incidents.values())
 
     def get_incident(self, incident_id: str) -> Incident | None:
-        return next((i for i in FIXTURE_INCIDENTS if i.id == incident_id), None)
+        return self.incidents.get(incident_id)
+
+    def _set(self, incident_id: str, **update: object) -> Incident:
+        inc = self.incidents[incident_id].model_copy(update=update)
+        self.incidents[incident_id] = inc
+        return inc
+
+    def acknowledge(self, incident_id: str, now: datetime) -> tuple[Incident | None, bool]:
+        inc = self.incidents.get(incident_id)
+        if inc is None or inc.status not in ("open", "escalated"):
+            return inc, False
+        return self._set(incident_id, status="acknowledged", acked_at=to_utc_iso(now)), True
+
+    def mark_escalated(self, incident_id: str, now: datetime) -> Incident | None:
+        inc = self.incidents.get(incident_id)
+        if inc is None or inc.status == "resolved":
+            return None
+        return self._set(incident_id, status="escalated", escalated_at=to_utc_iso(now))
+
+    def take_notify_slot(self, contact_id: str, now: datetime, limit: int) -> bool:
+        key = f"{contact_id}#{now.strftime('%Y-%m-%dT%H')}"
+        if self.slots.get(key, 0) >= limit:
+            return False
+        self.slots[key] = self.slots.get(key, 0) + 1
+        return True
+
+    def add_event(self, incident_id: str, event_type: str, now: datetime, **detail: str) -> None:
+        self.events.append((incident_id, event_type, detail))
+
+
+class FixtureNotifier:
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+
+    def publish(self, msg: dict) -> str:
+        self.sent.append(msg)
+        return f"fixture-{len(self.sent)}"

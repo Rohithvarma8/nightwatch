@@ -47,6 +47,33 @@ data "aws_iam_policy_document" "table_read" {
   }
 }
 
+# acknowledge / notify_contact / escalate: UpdateItem on incidents (and their timeline items)
+# and on per-contact notification rate-limit counters. Nothing else is writable.
+data "aws_iam_policy_document" "actions" {
+  statement {
+    sid       = "UpdateIncidents"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [var.table_arn]
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["INC#*", "RATE#*"]
+    }
+  }
+
+  statement {
+    sid       = "PublishNotifications"
+    actions   = ["sns:Publish"]
+    resources = [var.notify_topic_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "actions" {
+  name   = "actions"
+  role   = aws_iam_role.this.id
+  policy = data.aws_iam_policy_document.actions.json
+}
+
 resource "aws_iam_role_policy" "table_read" {
   name   = "table-read"
   role   = aws_iam_role.this.id
@@ -76,6 +103,7 @@ resource "aws_lambda_function" "this" {
       MCP_ALLOWED_HOSTS            = local.api_host
       NIGHTWATCH_TABLE             = var.table_name
       HOUSEHOLD_ID                 = var.household_id
+      NOTIFY_TOPIC_ARN             = var.notify_topic_arn
     }
   }
 
@@ -83,6 +111,7 @@ resource "aws_lambda_function" "this" {
     aws_cloudwatch_log_group.this,
     aws_iam_role_policy.logs,
     aws_iam_role_policy.table_read,
+    aws_iam_role_policy.actions,
   ]
 }
 

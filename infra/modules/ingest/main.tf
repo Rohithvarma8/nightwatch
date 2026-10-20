@@ -1,3 +1,6 @@
+data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
+
 locals {
   ingester_name = "${var.name_prefix}-ingest-nws"
   builder_name  = "${var.name_prefix}-incident-builder"
@@ -141,6 +144,23 @@ data "aws_iam_policy_document" "builder" {
   }
 
   statement {
+    sid       = "CreateEscalationSchedules"
+    actions   = ["scheduler:CreateSchedule"]
+    resources = ["arn:aws:scheduler:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:schedule/default/nw-esc-*"]
+  }
+
+  statement {
+    sid       = "PassEscalationSchedulerRole"
+    actions   = ["iam:PassRole"]
+    resources = [var.escalation_scheduler_role_arn]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["scheduler.amazonaws.com"]
+    }
+  }
+
+  statement {
     sid       = "PublishIncidentChanged"
     actions   = ["events:PutEvents"]
     resources = [aws_cloudwatch_event_bus.this.arn]
@@ -171,7 +191,10 @@ resource "aws_lambda_function" "builder" {
   timeout          = 30
 
   environment {
-    variables = local.common_env
+    variables = merge(local.common_env, {
+      ESCALATION_TARGET_ARN = var.escalation_target_arn
+      ESCALATION_ROLE_ARN   = var.escalation_scheduler_role_arn
+    })
   }
 
   depends_on = [aws_cloudwatch_log_group.builder, aws_iam_role_policy.builder]

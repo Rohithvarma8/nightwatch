@@ -36,6 +36,16 @@ variable "nws_schedule" {
   default     = "rate(5 minutes)"
 }
 
+variable "escalation_target_arn" {
+  description = "Escalation Lambda the builder's one-time schedules invoke."
+  type        = string
+}
+
+variable "escalation_scheduler_role_arn" {
+  description = "Role passed to Scheduler for escalation schedules."
+  type        = string
+}
+
 variable "log_retention_days" {
   description = "CloudWatch log retention."
   type        = number

@@ -20,7 +20,7 @@ nightwatch-core = { path = "../shared", editable = true }
 dev = [
     # boto3 ships in the Lambda python3.12 runtime; bundled only for local runs and tests.
     "boto3>=1.35",
-    "moto[dynamodb,events]>=5",
+    "moto[dynamodb,events,scheduler,sns,ses,ssm]>=5",
     "pytest>=8",
     "ruff>=0.6",
     "pyright>=1.1.380",

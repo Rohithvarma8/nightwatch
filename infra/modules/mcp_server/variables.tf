@@ -61,6 +61,11 @@ variable "table_arn" {
   type        = string
 }
 
+variable "notify_topic_arn" {
+  description = "SNS topic notify_contact / escalate publish to (the only non-DynamoDB call)."
+  type        = string
+}
+
 variable "household_id" {
   description = "Household the tools read (single demo household until account linking)."
   type        = string
