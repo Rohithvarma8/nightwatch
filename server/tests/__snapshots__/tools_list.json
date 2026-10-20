@@ -1,5 +1,10 @@
 [
   {
+    "_meta": {
+      "ui": {
+        "resourceUri": "ui://nightwatch/incidents.html"
+      }
+    },
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -50,6 +55,17 @@
       "$defs": {
         "IncidentView": {
           "properties": {
+            "deploy_versions": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Deploy Versions"
+            },
             "escalation_due_at": {
               "anyOf": [
                 {
@@ -142,6 +158,7 @@
             "spoken_summary",
             "top_action",
             "evidence_preview",
+            "deploy_versions",
             "escalation_due_at",
             "replay",
             "replay_original_time"
@@ -182,6 +199,11 @@
     "title": "Active incidents"
   },
   {
+    "_meta": {
+      "ui": {
+        "resourceUri": "ui://nightwatch/incidents.html"
+      }
+    },
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -271,6 +293,119 @@
           "title": "EvidenceItem",
           "type": "object"
         },
+        "IncidentView": {
+          "properties": {
+            "deploy_versions": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Deploy Versions"
+            },
+            "escalation_due_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Escalation Due At"
+            },
+            "evidence_preview": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Evidence Preview",
+              "type": "array"
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "hazard",
+                "prod"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "replay": {
+              "title": "Replay",
+              "type": "boolean"
+            },
+            "replay_original_time": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Replay Original Time"
+            },
+            "severity": {
+              "enum": [
+                "critical",
+                "high",
+                "moderate",
+                "low"
+              ],
+              "title": "Severity",
+              "type": "string"
+            },
+            "spoken_summary": {
+              "title": "Spoken Summary",
+              "type": "string"
+            },
+            "started_at": {
+              "title": "Started At",
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "open",
+                "acknowledged",
+                "escalated",
+                "resolved"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            },
+            "top_action": {
+              "title": "Top Action",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "title",
+            "severity",
+            "status",
+            "started_at",
+            "spoken_summary",
+            "top_action",
+            "evidence_preview",
+            "deploy_versions",
+            "escalation_due_at",
+            "replay",
+            "replay_original_time"
+          ],
+          "title": "IncidentView",
+          "type": "object"
+        },
         "TimelineEntry": {
           "properties": {
             "at": {
@@ -310,6 +445,9 @@
         "id": {
           "title": "Id",
           "type": "string"
+        },
+        "incident": {
+          "$ref": "#/$defs/IncidentView"
         },
         "replay": {
           "title": "Replay",
@@ -363,7 +501,8 @@
         "timeline",
         "sources",
         "replay",
-        "replay_original_time"
+        "replay_original_time",
+        "incident"
       ],
       "title": "Explanation",
       "type": "object"

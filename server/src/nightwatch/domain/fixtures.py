@@ -79,7 +79,11 @@ FIXTURE_INCIDENTS: list[Incident] = [
         evidence=[
             Evidence(type="alarm", detail="p95 latency alarm in ALARM", weight=1.0),
             Evidence(
-                type="deploy_proximity", detail="Deploy v42 to v43, 4 min earlier", weight=0.6
+                type="deploy_proximity",
+                detail="Latency rose 4 minutes after deployment d-AB12CD34E (v42→v43); "
+                "no other service changed",
+                weight=0.6,
+                spoken="Latency rose 4 minutes after a deploy from version 42 to 43",
             ),
         ],
         spoken_summary=(

@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Watch incidents</title>
+<!--
+  MCP Apps view for get_active_incidents and explain_incident (ui://nightwatch/incidents.html).
+  Self-contained: no external scripts, styles, fonts, images, or network requests. Renders only
+  from the tool result's structuredContent, which the host posts after the ui/initialize handshake.
+  All incident text reaches the DOM through textContent, never parsed as markup.
+-->
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --surface: #f4f5f7;
+  --text: #16181d;
+  --muted: #4a515c;
+  --border: #d3d7de;
+  --chip-bg: #e8ebf0;
+  --sev-critical: #b00020;
+  --sev-high: #b93d0b;
+  --sev-moderate: #8a5300;
+  --sev-low: #1d4ed8;
+  --sev-text: #ffffff;
+  --status-open: #8a5300;
+  --status-ack: #1f6f3a;
+  --status-esc: #b00020;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121417;
+    --surface: #1c1f24;
+    --text: #f1f3f5;
+    --muted: #b4bbc6;
+    --border: #3a3f47;
+    --chip-bg: #2a2e35;
+    --sev-critical: #ff8a8a;
+    --sev-high: #fdae6b;
+    --sev-moderate: #f5d547;
+    --sev-low: #93c5fd;
+    --sev-text: #111111;
+    --status-open: #f5d547;
+    --status-ack: #7ee2a0;
+    --status-esc: #ff8a8a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121417;
+  --surface: #1c1f24;
+  --text: #f1f3f5;
+  --muted: #b4bbc6;
+  --border: #3a3f47;
+  --chip-bg: #2a2e35;
+  --sev-critical: #ff8a8a;
+  --sev-high: #fdae6b;
+  --sev-moderate: #f5d547;
+  --sev-low: #93c5fd;
+  --sev-text: #111111;
+  --status-open: #f5d547;
+  --status-ack: #7ee2a0;
+  --status-esc: #ff8a8a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+  font-size: clamp(16px, 2.2vw + 10px, 20px);
+  line-height: 1.4;
+  padding: 12px;
+}
+header {
+  display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  color: var(--muted); font-size: 0.8em; margin: 0 2px 10px;
+}
+#cards {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 8px solid var(--sev);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-width: 0;
+}
+.sev-critical { --sev: var(--sev-critical); }
+.sev-high { --sev: var(--sev-high); }
+.sev-moderate { --sev: var(--sev-moderate); }
+.sev-low { --sev: var(--sev-low); }
+.top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pill {
+  background: var(--sev); color: var(--sev-text);
+  font-weight: 700; font-size: 0.75em; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px;
+}
+.kind { color: var(--muted); font-size: 0.8em; }
+h2 { margin: 0; font-size: 1.3em; line-height: 1.2; overflow-wrap: anywhere; }
+.summary { margin: 0; }
+.action {
+  margin: 0; padding: 8px 10px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--border); font-weight: 600;
+}
+.action span { color: var(--muted); font-weight: 400; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.chip {
+  background: var(--chip-bg); border-radius: 8px; padding: 3px 8px; font-size: 0.8em;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chip.deploy { font-weight: 700; font-variant-numeric: tabular-nums; }
+.status { font-weight: 700; font-size: 0.9em; display: flex; gap: 10px; flex-wrap: wrap; }
+.status-open { color: var(--status-open); }
+.status-acknowledged { color: var(--status-ack); }
+.status-escalated { color: var(--status-esc); }
+.status-resolved { color: var(--muted); }
+.countdown { font-variant-numeric: tabular-nums; }
+.replay {
+  margin: 2px 0 0; padding-top: 8px; border-top: 1px dashed var(--border);
+  color: var(--muted); font-size: 0.8em;
+}
+.empty { text-align: center; padding: 24px 16px; border-left-width: 1px; }
+.empty h2 { color: var(--status-ack); }
+@media (max-height: 520px) and (min-width: 700px) {
+  body { padding: 8px; }
+  .card { padding: 10px 14px; gap: 6px; }
+}
+</style>
+</head>
+<body>
+<header><span id="household">Night Watch</span><span id="asof"></span></header>
+<main id="cards" aria-live="polite"><p class="kind">Waiting for incidents…</p></main>
+<script>
+(function () {
+  "use strict";
+  var SEVERITIES = ["critical", "high", "moderate", "low"];
+  var STATUS_LABEL = {
+    open: "Open", acknowledged: "Acknowledged", escalated: "Escalated", resolved: "Resolved"
+  };
+  var hostContext = {};
+  var latest = null;  // last tool result, re-rendered when the host context changes
+  var nextId = 1;
+  var pending = {};
+
+  function post(message) { window.parent.postMessage(message, "*"); }
+  function notify(method, params) { post({ jsonrpc: "2.0", method: method, params: params || {} }); }
+  function request(method, params, onResult) {
+    var id = nextId++;
+    pending[id] = onResult;
+    post({ jsonrpc: "2.0", id: id, method: method, params: params });
+  }
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = String(text);
+    return node;
+  }
+
+  function applyContext(ctx) {
+    for (var k in ctx) if (Object.prototype.hasOwnProperty.call(ctx, k)) hostContext[k] = ctx[k];
+    var theme = hostContext.theme;
+    if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+    var fonts = hostContext.styles && hostContext.styles.variables &&
+      hostContext.styles.variables["--font-sans"];
+    if (fonts) document.documentElement.style.setProperty("--font-sans", fonts);
+  }
+
+  function formatTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var opts = { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+    if (hostContext.timeZone) opts.timeZone = hostContext.timeZone;
+    try { return new Intl.DateTimeFormat(hostContext.locale || undefined, opts).format(d); }
+    catch (e) { return d.toLocaleString(); }
+  }
+
+  function countdownText(dueIso) {
+    var ms = new Date(dueIso).getTime() - Date.now();
+    if (isNaN(ms)) return "";
+    if (ms <= 0) return "Escalating now";
+    var s = Math.ceil(ms / 1000);
+    var m = Math.floor(s / 60);
+    var r = s % 60;
+    return "Escalation in " + m + ":" + (r < 10 ? "0" : "") + r;
+  }
+
+  function tick() {
+    var nodes = document.querySelectorAll("[data-due]");
+    for (var i = 0; i < nodes.length; i++) nodes[i].textContent = countdownText(nodes[i].dataset.due);
+  }
+
+  function card(inc) {
+    var sev = SEVERITIES.indexOf(inc.severity) >= 0 ? inc.severity : "low";
+    var root = el("article", "card sev-" + sev);
+    var top = el("div", "top");
+    top.appendChild(el("span", "pill", sev));
+    top.appendChild(el("span", "kind", inc.kind === "prod" ? "On-call" : "Home"));
+    root.appendChild(top);
+    root.appendChild(el("h2", null, inc.title));
+    if (inc.spoken_summary) root.appendChild(el("p", "summary", inc.spoken_summary));
+    if (inc.top_action) {
+      var action = el("p", "action");
+      action.appendChild(el("span", null, "Do now: "));
+      action.appendChild(document.createTextNode(inc.top_action));
+      root.appendChild(action);
+    }
+    var chips = el("ul", "chips");
+    if (inc.deploy_versions) chips.appendChild(el("li", "chip deploy", "Deploy " + inc.deploy_versions));
+    (inc.evidence_preview || []).slice(0, 2).forEach(function (text) {
+      var chip = el("li", "chip", text);
+      chip.title = text;
+      chips.appendChild(chip);
+    });
+    if (chips.childNodes.length) root.appendChild(chips);
+    var status = el("div", "status status-" + inc.status);
+    status.appendChild(el("span", null, STATUS_LABEL[inc.status] || inc.status));
+    if (inc.status === "open" && inc.escalation_due_at) {
+      var cd = el("span", "countdown", countdownText(inc.escalation_due_at));
+      cd.dataset.due = inc.escalation_due_at;
+      status.appendChild(cd);
+    }
+    root.appendChild(status);
+    if (inc.replay) {
+      var when = inc.replay_original_time ? formatTime(inc.replay_original_time) : "";
+      root.appendChild(el("p", "replay",
+        "Replayed alert" + (when ? ", originally issued " + when : "")));
+    }
+    return root;
+  }
+
+  function render(result) {
+    latest = result;
+    var sc = (result && result.structuredContent) || {};
+    var list = Array.isArray(sc.incidents) ? sc.incidents : sc.incident ? [sc.incident] : null;
+    var main = document.getElementById("cards");
+    main.textContent = "";
+    if (sc.household) document.getElementById("household").textContent = "Night Watch · " + sc.household;
+    document.getElementById("asof").textContent = sc.as_of ? "As of " + formatTime(sc.as_of) : "";
+    if (!list) {
+      var text = ((result && result.content) || []).filter(function (c) { return c.type === "text"; })
+        .map(function (c) { return c.text; }).join(" ");
+      main.appendChild(el("p", "summary", text || "No incident data."));
+    } else if (!list.length) {
+      var empty = el("article", "card empty");
+      empty.appendChild(el("h2", null, "All clear"));
+      empty.appendChild(el("p", "summary", "No active incidents right now."));
+      main.appendChild(empty);
+    } else {
+      list.forEach(function (inc) { main.appendChild(card(inc)); });
+    }
+    reportSize();
+  }
+
+  var lastSize = "";
+  function reportSize() {
+    var w = Math.ceil(document.documentElement.scrollWidth);
+    var h = Math.ceil(document.documentElement.scrollHeight);
+    var key = w + "x" + h;
+    if (key === lastSize) return;
+    lastSize = key;
+    notify("ui/notifications/size-changed", { width: w, height: h });
+  }
+
+  window.addEventListener("message", function (event) {
+    if (event.source !== window.parent) return;
+    var msg = event.data;
+    if (!msg || msg.jsonrpc !== "2.0") return;
+    if (msg.id != null && !msg.method) {  // response to one of our requests
+      var cb = pending[msg.id];
+      delete pending[msg.id];
+      if (cb && msg.result) cb(msg.result);
+      return;
+    }
+    switch (msg.method) {
+      case "ui/notifications/tool-result": render(msg.params); break;
+      case "ui/notifications/host-context-changed": 
+        applyContext(msg.params || {});
+        if (latest) render(latest);
+        break;
+      case "ui/notifications/tool-cancelled":
+        document.getElementById("cards").textContent = "";
+        document.getElementById("cards").appendChild(el("p", "summary", "Request cancelled."));
+        reportSize();
+        break;
+      case "ui/resource-teardown": post({ jsonrpc: "2.0", id: msg.id, result: {} }); break;
+      default:
+        if (msg.id != null) {  // unknown request: answer so the host isn't left waiting
+          post({ jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "Method not found" } });
+        }
+    }
+  });
+
+  if (typeof ResizeObserver === "function") new ResizeObserver(reportSize).observe(document.body);
+  setInterval(tick, 1000);
+
+  request("ui/initialize", {
+    protocolVersion: "2026-01-26",
+    appInfo: { name: "nightwatch-incidents", version: "0.1.0" },
+    appCapabilities: { availableDisplayModes: ["inline"] }
+  }, function (result) {
+    applyContext(result.hostContext || {});
+    notify("ui/notifications/initialized");
+  });
+})();
+</script>
+</body>
+</html>

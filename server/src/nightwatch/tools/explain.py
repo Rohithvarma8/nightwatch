@@ -3,12 +3,13 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.apps import Apps
 from mcp_types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 
 from nightwatch.domain.explain import Depth, Explanation, explain, spoken_explanation
 from nightwatch.domain.incidents import IncidentSource
+from nightwatch.tools.card import CARD_URI
 from nightwatch.tools.common import resolve_incident
 
 DESCRIPTION = (
@@ -20,8 +21,9 @@ DESCRIPTION = (
 )
 
 
-def register(server: MCPServer, source: IncidentSource) -> None:
-    @server.tool(
+def register(apps: Apps, source: IncidentSource) -> None:
+    @apps.tool(
+        resource_uri=CARD_URI,
         name="explain_incident",
         title="Explain an incident",
         description=DESCRIPTION,

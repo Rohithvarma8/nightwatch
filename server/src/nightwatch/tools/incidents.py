@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.apps import Apps
 from mcp_types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 
@@ -15,6 +15,7 @@ from nightwatch.domain.incidents import (
     select_active,
 )
 from nightwatch.domain.models import ActiveIncidents, Scope, Severity
+from nightwatch.tools.card import CARD_URI
 
 DESCRIPTION = (
     "Use when the user asks what's going on, whether anything is wrong, or for a status "
@@ -25,8 +26,9 @@ DESCRIPTION = (
 )
 
 
-def register(server: MCPServer, source: IncidentSource) -> None:
-    @server.tool(
+def register(apps: Apps, source: IncidentSource) -> None:
+    @apps.tool(
+        resource_uri=CARD_URI,
         name="get_active_incidents",
         title="Active incidents",
         description=DESCRIPTION,

@@ -29,6 +29,7 @@ class IncidentView(BaseModel):
     spoken_summary: str
     top_action: str
     evidence_preview: list[str]
+    deploy_versions: str | None  # prod: "v2→v3", from deploy_proximity evidence
     escalation_due_at: str | None
     replay: bool
     replay_original_time: str | None

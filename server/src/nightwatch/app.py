@@ -1,5 +1,6 @@
 """Night Watch MCP server entry point: `uvicorn nightwatch.app:asgi`."""
 
+from mcp.server.apps import Apps
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
@@ -11,7 +12,7 @@ from nightwatch import settings as settings_mod
 from nightwatch.domain.fixtures import FixtureNotifier, FixtureSource
 from nightwatch.domain.incidents import IncidentSource, Notifier
 from nightwatch.domain.runbooks import load_runbooks
-from nightwatch.tools import actions, explain, incidents, rollback, runbooks
+from nightwatch.tools import actions, card, explain, incidents, rollback, runbooks
 
 MCP_PATH = "/mcp"
 # The SDK's defaults when host="127.0.0.1"; kept so `make run` and the Inspector keep working.
@@ -66,14 +67,19 @@ def deployer_for(cfg: settings_mod.Settings) -> rollback.Deployer | None:
 def create_server(
     source: IncidentSource, notifier: Notifier, deployer: rollback.Deployer | None = None
 ) -> MCPServer:
+    # MCP Apps: the two read tools carry _meta.ui.resourceUri → the incident card. Extensions
+    # are applied at construction, so the Apps tools are bound before the server exists.
+    apps = Apps()
+    card.register(apps)  # HTML read once at init, no per-request I/O
+    incidents.register(apps, source)
+    explain.register(apps, source)
     server = MCPServer(
         name="nightwatch",
         title="Night Watch",
         version="0.1.0",
         instructions="Household incident commander: home hazards and production on-call alerts.",
+        extensions=[apps],
     )
-    incidents.register(server, source)
-    explain.register(server, source)
     runbooks.register(server, source, load_runbooks())  # read once at init, no per-request I/O
     actions.register(server, source, notifier)
     rollback.register(server, source, deployer)

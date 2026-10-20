@@ -1,5 +1,6 @@
 """Ranking, replay rules, and spoken formatting for active incidents. Pure (no I/O)."""
 
+import re
 from datetime import datetime
 from typing import Protocol
 
@@ -19,6 +20,7 @@ _SCOPE_KIND = {"home": "hazard", "work": "prod"}
 _COUNT_WORDS = ["Nothing", "One thing", "Two things", "Three things", "Four things", "Five things"]
 EVIDENCE_PREVIEW = 2
 REPLAY_PREFIX = "Replayed alert:"
+_DEPLOY_VERSIONS = re.compile(r"\(v(\w+)→v(\w+)\)")  # rules.proximity_evidence detail
 
 
 class IncidentSource(Protocol):
@@ -112,6 +114,14 @@ def inline_title(incident: Incident | IncidentView) -> str:
     return f"replayed {incident.title}" if incident.replay else incident.title
 
 
+def deploy_versions(incident: Incident) -> str | None:
+    """ "v2→v3" from deploy_proximity evidence, for the card. None for hazards."""
+    for e in incident.evidence:
+        if e.type == "deploy_proximity" and (m := _DEPLOY_VERSIONS.search(e.detail)):
+            return f"v{m[1]}→v{m[2]}"
+    return None
+
+
 def to_view(incident: Incident) -> IncidentView:
     return IncidentView(
         id=incident.id,
@@ -123,6 +133,7 @@ def to_view(incident: Incident) -> IncidentView:
         spoken_summary=incident.spoken_summary,
         top_action=incident.top_action,
         evidence_preview=[e.detail for e in incident.evidence[:EVIDENCE_PREVIEW]],
+        deploy_versions=deploy_versions(incident),
         escalation_due_at=incident.escalation_due_at if incident.status == "open" else None,
         replay=incident.replay,
         replay_original_time=incident.replay_original_time,
