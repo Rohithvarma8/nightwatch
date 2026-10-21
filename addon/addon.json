@@ -1,0 +1,80 @@
+{
+  "manifestVersion": "1.0",
+  "storeListing": {
+    "distributionCountries": [
+      "US"
+    ],
+    "locales": {
+      "en-US": {
+        "default": "DEFAULT",
+        "name": {
+          "value": "Night Watch"
+        },
+        "shortDescription": "Your incident commander for home emergencies and production on-call: what's happening, why, and what to do next.",
+        "fullDescription": "Night Watch turns real alerts into short, spoken briefings. It watches National Weather Service alerts for your home and the CloudWatch alarms and CodeDeploy deployments for your service, correlates them with deterministic rules, and tells you what's going on, why it thinks so, and the next step. Ask for the evidence behind an incident, get the runbook's next step, acknowledge an incident to stop its escalation timer, tell a contact by push and email, or roll back a bad deploy after you confirm. Summaries are checked against the source alerts, so they never add facts, and replayed alerts are always labeled as replays.",
+        "examplePhrases": [
+          "What's going on tonight?",
+          "Why do you think it's the deploy?",
+          "Tell my roommate about the fire warning",
+          "Roll back the checkout service"
+        ],
+        "privacyAndCompliance": {
+          "privacyPolicyUrl": "https://REPLACE-ME.example.com/privacy",
+          "termsOfUseUrl": "https://REPLACE-ME.example.com/terms"
+        },
+        "mediaAssets": {
+          "icons": {
+            "light": [
+              {
+                "size": "72x72",
+                "uri": "https://REPLACE-ME.example.com/icons/night-watch-light-72x72.png"
+              },
+              {
+                "size": "64x64",
+                "uri": "https://REPLACE-ME.example.com/icons/night-watch-light-64x64.png"
+              },
+              {
+                "size": "88x88",
+                "uri": "https://REPLACE-ME.example.com/icons/night-watch-light-88x88.png"
+              },
+              {
+                "size": "126x126",
+                "uri": "https://REPLACE-ME.example.com/icons/night-watch-light-126x126.png"
+              },
+              {
+                "size": "180x180",
+                "uri": "https://REPLACE-ME.example.com/icons/night-watch-light-180x180.png"
+              },
+              {
+                "size": "241x241",
+                "uri": "https://REPLACE-ME.example.com/icons/night-watch-light-241x241.png"
+              }
+            ],
+            "dark": []
+          },
+          "carouselImages": [
+            {
+              "uri": "https://REPLACE-ME.example.com/carousel/night-watch-card-600x900.png",
+              "altText": "Night Watch incident card: Fire risk, high, with the next step and an escalation countdown",
+              "size": "600x900"
+            }
+          ],
+          "bannerImages": []
+        }
+      }
+    }
+  },
+  "integrations": [
+    {
+      "type": "MCP",
+      "config": {
+        "endpoints": {
+          "default": {
+            "type": "HTTPS",
+            "uri": "https://2wj4gc9lz8.execute-api.us-west-2.amazonaws.com/mcp"
+          }
+        }
+      }
+    }
+  ]
+}
