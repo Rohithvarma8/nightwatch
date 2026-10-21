@@ -426,6 +426,10 @@
         }
       },
       "properties": {
+        "as_of": {
+          "title": "As Of",
+          "type": "string"
+        },
         "confidence": {
           "enum": [
             "high",
@@ -441,6 +445,10 @@
           },
           "title": "Evidence",
           "type": "array"
+        },
+        "household": {
+          "title": "Household",
+          "type": "string"
         },
         "id": {
           "title": "Id",
@@ -502,7 +510,9 @@
         "sources",
         "replay",
         "replay_original_time",
-        "incident"
+        "incident",
+        "household",
+        "as_of"
       ],
       "title": "Explanation",
       "type": "object"
@@ -510,6 +520,11 @@
     "title": "Explain an incident"
   },
   {
+    "_meta": {
+      "ui": {
+        "resourceUri": "ui://nightwatch/incidents.html"
+      }
+    },
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -584,6 +599,14 @@
         }
       },
       "properties": {
+        "as_of": {
+          "title": "As Of",
+          "type": "string"
+        },
+        "household": {
+          "title": "Household",
+          "type": "string"
+        },
         "incident_id": {
           "title": "Incident Id",
           "type": "string"
@@ -618,7 +641,9 @@
         "incident_id",
         "incident_title",
         "next_step",
-        "steps"
+        "steps",
+        "household",
+        "as_of"
       ],
       "title": "RunbookView",
       "type": "object"

@@ -67,12 +67,14 @@ def deployer_for(cfg: settings_mod.Settings) -> rollback.Deployer | None:
 def create_server(
     source: IncidentSource, notifier: Notifier, deployer: rollback.Deployer | None = None
 ) -> MCPServer:
-    # MCP Apps: the two read tools carry _meta.ui.resourceUri → the incident card. Extensions
+    # MCP Apps: the three read tools carry _meta.ui.resourceUri → the incident card. Extensions
     # are applied at construction, so the Apps tools are bound before the server exists.
     apps = Apps()
+    books = load_runbooks()  # read once at init, no per-request I/O
     card.register(apps)  # HTML read once at init, no per-request I/O
-    incidents.register(apps, source)
-    explain.register(apps, source)
+    incidents.register(apps, source, books)
+    explain.register(apps, source, books)
+    runbooks.register(apps, source, books)
     server = MCPServer(
         name="nightwatch",
         title="Night Watch",
@@ -80,7 +82,6 @@ def create_server(
         instructions="Household incident commander: home hazards and production on-call alerts.",
         extensions=[apps],
     )
-    runbooks.register(server, source, load_runbooks())  # read once at init, no per-request I/O
     actions.register(server, source, notifier)
     rollback.register(server, source, deployer)
     server.custom_route("/healthz", methods=["GET"], include_in_schema=False)(healthz)

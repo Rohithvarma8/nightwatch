@@ -14,7 +14,7 @@ from .test_transport import JSON_HEADERS, ClientFactory
 
 pytestmark = pytest.mark.anyio
 
-CARD_TOOLS = {"get_active_incidents", "explain_incident"}
+CARD_TOOLS = {"get_active_incidents", "explain_incident", "get_runbook"}
 
 
 async def test_card_resource_is_listed_as_mcp_app(mcp_client: ClientFactory) -> None:
@@ -92,3 +92,18 @@ async def test_text_stays_complete_without_the_card(mcp_client: ClientFactory) -
     assert why.structured_content is not None
     view = why.structured_content["incident"]
     assert view["deploy_versions"] == "v42→v43" and view["severity"] and view["status"]
+
+
+async def test_every_card_result_has_the_same_header(mcp_client: ClientFactory) -> None:
+    async with mcp_client() as client:
+        results = [
+            await client.call_tool("get_active_incidents", {}),
+            await client.call_tool("explain_incident", {"reference": "fire"}),
+            await client.call_tool("get_runbook", {"reference": "fire"}),
+        ]
+    for result in results:
+        sc = result.structured_content
+        assert sc is not None and sc["household"] == "Demo Household"
+        assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", sc["as_of"])
+    steps = results[2].structured_content["steps"]  # type: ignore[index]
+    assert steps[0]["n"] == 1 and all(not s["done"] for s in steps)

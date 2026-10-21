@@ -107,6 +107,14 @@ h2 { margin: 0; font-size: 1.3em; line-height: 1.2; overflow-wrap: anywhere; }
   background: var(--bg); border: 1px solid var(--border); font-weight: 600;
 }
 .action span { color: var(--muted); font-weight: 400; }
+.steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.step { display: grid; grid-template-columns: 1.6em 1fr; gap: 2px 8px; padding: 6px 8px; border-radius: 8px; }
+.step .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.step .why { grid-column: 2; color: var(--muted); font-size: 0.85em; }
+.step.next { background: var(--bg); border: 1px solid var(--border); }
+.step.next .act { font-weight: 600; }
+.step.done .act { text-decoration: line-through; color: var(--muted); }
+.next-tag { margin-left: 6px; font-size: 0.75em; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .chip {
   background: var(--chip-bg); border-radius: 8px; padding: 3px 8px; font-size: 0.8em;
@@ -233,6 +241,29 @@ h2 { margin: 0; font-size: 1.3em; line-height: 1.2; overflow-wrap: anywhere; }
     return root;
   }
 
+  function runbookCard(book) {
+    var root = el("article", "card runbook");
+    var top = el("div", "top");
+    top.appendChild(el("span", "kind", "Runbook" + (book.incident_title ? " · " + book.incident_title : "")));
+    root.appendChild(top);
+    root.appendChild(el("h2", null, book.title));
+    var list = el("ol", "steps");
+    var nextShown = false;
+    (book.steps || []).forEach(function (step) {
+      var isNext = !step.done && !nextShown;
+      if (isNext) nextShown = true;
+      var item = el("li", "step" + (step.done ? " done" : "") + (isNext ? " next" : ""));
+      item.appendChild(el("span", "n", step.n + "."));
+      var act = el("span", "act", step.action);
+      if (isNext) act.appendChild(el("span", "next-tag", "Next"));
+      item.appendChild(act);
+      if (step.why) item.appendChild(el("span", "why", step.why));
+      list.appendChild(item);
+    });
+    root.appendChild(list);
+    return root;
+  }
+
   function render(result) {
     latest = result;
     var sc = (result && result.structuredContent) || {};
@@ -241,7 +272,9 @@ h2 { margin: 0; font-size: 1.3em; line-height: 1.2; overflow-wrap: anywhere; }
     main.textContent = "";
     if (sc.household) document.getElementById("household").textContent = "Night Watch · " + sc.household;
     document.getElementById("asof").textContent = sc.as_of ? "As of " + formatTime(sc.as_of) : "";
-    if (!list) {
+    if (Array.isArray(sc.steps)) {
+      main.appendChild(runbookCard(sc));
+    } else if (!list) {
       var text = ((result && result.content) || []).filter(function (c) { return c.type === "text"; })
         .map(function (c) { return c.text; }).join(" ");
       main.appendChild(el("p", "summary", text || "No incident data."));
