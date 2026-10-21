@@ -32,7 +32,11 @@ _GEO_NOUNS = {
     "county", "counties", "valley", "valleys", "coast", "coasts", "mountains", "beaches",
     "area", "areas", "region",
 }  # fmt: skip
-_CAPITALIZED_RUN = re.compile(r"[A-Z][a-zA-Z.'-]*(?:\s+[A-Z][a-zA-Z.'-]*)*")
+# A trailing period ends a run ("…Ventura Counties. Winds…" is two runs), except after an
+# abbreviation ("U.S. Forest Service") or a place title ("Mt. Pinos"), which stay one name.
+_ABBREVIATION = r"(?:[A-Z]\.){2,}|(?:Mt|St|Ft|Pt)\."
+_CAPITALIZED_WORD = rf"(?:{_ABBREVIATION}|[A-Z][a-zA-Z'-]*(?:\.[a-zA-Z'-]+)*)"
+_CAPITALIZED_RUN = re.compile(rf"{_CAPITALIZED_WORD}(?:\s+{_CAPITALIZED_WORD})*")
 _SENTENCE_START = re.compile(r"(?:^|[.!?:;]\s+|\n)$")
 
 
@@ -114,7 +118,7 @@ def _place_candidates(text: str) -> list[tuple[str, ...]]:
         if len(run) == 1 and at_start:
             continue  # ordinary sentence-initial word ("Keep", "Strong")
         words = [
-            w.strip(".'")
+            w.strip("'")  # keep abbreviation periods: "U.S. Forest" must match the source
             for w in run
             if w.strip(".'-") not in _NOT_PLACES
             and w.lower().strip(".'") not in _TIME_WORDS | {"the", "a", "an"}
