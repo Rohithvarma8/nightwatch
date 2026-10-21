@@ -79,7 +79,7 @@ Requirements are from Amazon's
 | Protocol versions | Accepts `2025-03-26` (which the Alexa+ client has been documented sending) and `2025-11-25`, and returns the version requested. `2025-06-18` is accepted too, and `2026-07-28` negotiates down to `2025-11-25` |
 | MCP Apps card | `_meta.ui.resourceUri` → `ui://nightwatch/incidents.html` (`text/html;profile=mcp-app`) on 3 tools. One self-contained file with no network calls |
 | GET `/mcp` | `405` with `Allow: POST`. The SDK held GET open as an SSE stream, so a small wrapper rejects it ([FL-003](docs/friction-log.md)) |
-| No `WWW-Authenticate` | No response carries it. Auth isn't implemented yet (the OAuth spike in DESIGN.md §6 didn't ship), so the demo server is open |
+| No `WWW-Authenticate` | No response carries it. Auth isn't implemented (the OAuth spike didn't ship), so the demo server is open; per Amazon's account-linking docs, account linking is optional for MCP add-ons |
 | Round trip < 500 ms (warm) | **p95 89 ms** from a GitHub runner (mcp-slo in CI: 2 workers, 10 req/s, 0% errors). **p95 137 ms** from a laptop in an mcp-slo run (15 req/s, 456 requests). Single calls with curl: 0.14–0.25 s |
 | Cold starts | **1.8–2.1 s** round trip on a cold Lambda (Init 1.1–1.5 s, about 0.9 s of it importing the MCP SDK, [FL-006](docs/friction-log.md)). Warmed by hand before recording. `make warm-on` sets provisioned concurrency = 1 if always-warm is needed |
 
