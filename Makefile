@@ -1,6 +1,7 @@
 SERVER := server
-PACKAGES := shared pipeline server
+PACKAGES := shared pipeline server alexa-sim
 PORT   ?= 8080
+SIM_PORT ?= 8765
 MCP_URL ?= http://localhost:$(PORT)/mcp
 TF_DEV  := infra/envs/dev
 # Local, gitignored toggle; terraform loads *.auto.tfvars on every apply, so `make deploy` keeps it.
@@ -8,7 +9,7 @@ WARM_TFVARS := $(TF_DEV)/warm.auto.tfvars
 AWS_ENV := AWS_PROFILE=nightwatch AWS_DEFAULT_REGION=us-west-2
 TF_OUT   = terraform -chdir=$(CURDIR)/$(TF_DEV) output -raw
 
-.PHONY: setup lint test run inspect build deploy warm-on warm-off seed-household replay reset-incidents smoke bad-deploy good-deploy
+.PHONY: setup lint test run inspect build deploy warm-on warm-off seed-household replay reset-incidents smoke bad-deploy good-deploy sim sim-smoke
 
 setup:  ## Install deps for shared/, pipeline/, server/ (uv)
 	for p in $(PACKAGES); do (cd $$p && uv sync --all-extras) || exit 1; done
@@ -69,3 +70,10 @@ bad-deploy:  ## Deploy checkout-service with the latency regression (CodeDeploy,
 
 good-deploy:  ## Deploy the good checkout-service version (this is the rollback)
 	scripts/deploy_checkout.sh good
+
+sim:  ## Simulated Alexa+ client (unofficial) on http://localhost:$(SIM_PORT), against the live MCP URL
+	cd alexa-sim && MCP_URL="$$($(TF_OUT) mcp_url)" $(AWS_ENV) \
+		uv run uvicorn nightwatch_sim.app:app --host 127.0.0.1 --port $(SIM_PORT)
+
+sim-smoke:  ## Demo turns through the simulator agent against the live server (REAL notify + rollback)
+	cd alexa-sim && MCP_URL="$$($(TF_OUT) mcp_url)" $(AWS_ENV) uv run python -m nightwatch_sim.smoke

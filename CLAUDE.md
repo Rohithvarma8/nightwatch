@@ -15,15 +15,15 @@ Design references: `docs/architecture.md`, `DESIGN.md` (tool schemas, data model
 6. **Unauthenticated → HTTP 401 with NO `WWW-Authenticate` header** (Alexa+ requirement). Never use API Gateway JWT authorizers or SDK auth middleware that adds that header. Auth lives in `server/src/nightwatch/middleware/auth.py`, toggled by `AUTH_MODE=none|jwt`.
 7. **Replay honesty:** replayed signals carry `replay=true` and `replay_original_time`, and the UI shows it. Never strip these flags.
 8. Every tool returns short spoken-friendly `content` text **and** `structuredContent`. ≤ 40 words per incident. Never read IDs aloud.
-9. **Changing a tool's name, description, or schema requires `alexa-ai deploy`.** Alexa refreshes tools only on deploy. Remind the human in your summary whenever you change one.
+9. **Tool names, descriptions, and schemas are a contract.** Alexa refreshes tools only on `alexa-ai deploy`, so when Alexa+ onboarding becomes available (the Alexa+ developer tools are partner-preview only; organizers confirmed this on Devpost topic 45262), every change since the last deploy needs one. Until then, note each change in the devlog.
 10. No secrets in git. Use SSM SecureString (AirNow key, ntfy topic) and env vars locally via `.env` (gitignored).
 
 ## Stack
 - Python 3.12, `uv`, **MCP Python SDK v2** (pinned exact version in `server/pyproject.toml`; class is `MCPServer`, MCP Apps via the SDK `Apps` extension). Check the official docs at py.sdk.modelcontextprotocol.io before using an API you're unsure of. Don't use v1 `FastMCP` examples.
-- pydantic v2, boto3, aws-lambda-powertools (logger, metrics/EMF, tracer), Strands Agents SDK + Amazon Bedrock (triage only).
+- pydantic v2, boto3, aws-lambda-powertools (logger, metrics/EMF, tracer), Strands Agents SDK + Amazon Bedrock (triage, and the local `alexa-sim/` client; never the MCP server).
 - Lambda (arm64) + Lambda Web Adapter + uvicorn; API Gateway HTTP API; DynamoDB single table; EventBridge bus + Scheduler; SNS/SES; CodeDeploy; CloudWatch; X-Ray.
 - Terraform ≥ 1.10, AWS provider pinned in `infra/envs/dev/versions.tf`.
-- Node 24+ only for MCP Inspector / Alexa Local Inspector tooling.
+- Node 24+ only for MCP Inspector tooling.
 
 ## Layout
 ```
@@ -32,7 +32,8 @@ pipeline/    async Lambdas: ingest/, triage/, escalation/, notify/, recorder/, r
 demo-service/ checkout Lambda + loadgen + bad/good deploy scripts
 runbooks/    YAML runbooks     replay/scenarios/  recorded real payloads
 infra/       Terraform: bootstrap/, modules/*, envs/dev/
-addon/       Alexa+ add-on package (addon.json) — edit via alexa-ai / Agent Skill
+alexa-sim/   simulated Alexa+ client (unofficial, local only): Strands agent + smart-display page + MCP Apps host
+addon/       (not created) Alexa+ add-on package, when Alexa+ onboarding becomes available
 site/        privacy, terms, icons, carousel (served by CloudFront)
 docs/        architecture, friction-log, product-feedback, devpost, devlog
 ```
@@ -47,19 +48,19 @@ make run            # uvicorn locally on :8080 (DynamoDB Local via docker compos
 make inspect        # npx @modelcontextprotocol/inspector → http://localhost:8080/mcp
 make tunnel         # cloudflared tunnel for testing the local server from Alexa
 make build          # build Lambda zips (aarch64 wheels) into dist/
-make deploy         # build + terraform apply (envs/dev) + print MCP URL; prints REDEPLOY ADD-ON warning if tool schemas changed
-make addon-deploy   # cd addon && alexa-ai deploy
-make local-inspect  # addon-local-inspector $(MCP_URL)
+make deploy         # build + terraform apply (envs/dev) + print MCP URL
+make sim            # simulated Alexa+ client on http://localhost:8765 against the live MCP URL
+make sim-smoke      # demo turns through the simulator agent (real notify + rollback on the 'yes' turns)
 make seed-household # write the demo household (Simi Valley, NWS zone CAZ374) to the dev table
 make replay FILE=~/nightwatch-alert-archive/archive/nws/<day>/<id>.json   # time-shifted, replay=true
 make bad-deploy / make good-deploy   # demo-service via CodeDeploy
 make slo            # mcp-slo run --url $(MCP_URL) --profile alexa --slo 'p95<500ms'
 ```
-`make deploy` computes a hash of all tool definitions (`scripts/tool_hash.py`) and warns if it differs from `addon/.last_deployed_tool_hash`.
+When Alexa+ onboarding becomes available: `alexa-ai deploy` (add-on) and the Alexa Local Inspector; neither is available to hackathon participants.
 
 ## Testing approach
 - **Unit:** domain logic (severity, ranking, correlation rules, spoken formatting, template fallback) with table-driven tests. Fixtures in `tests/fixtures/` are real recorded payloads.
-- **Contract:** spin up the ASGI app in-process and use the SDK's client over Streamable HTTP: `initialize` (both protocol versions), `tools/list` snapshot test (schema changes must be deliberate: update the snapshot and redeploy the add-on), `tools/call` for every tool, error paths.
+- **Contract:** spin up the ASGI app in-process and use the SDK's client over Streamable HTTP: `initialize` (both protocol versions), `tools/list` snapshot test (schema changes must be deliberate: update the snapshot, and redeploy the add-on when Alexa+ onboarding becomes available), `tools/call` for every tool, error paths.
 - **Auth:** with `AUTH_MODE=jwt`, unauthenticated `tools/call` → 401, and the response must NOT contain `WWW-Authenticate`; `initialize`/`tools/list` → 200.
 - **Latency:** a contract test asserts each tool handler completes in < 50 ms against moto/DynamoDB Local; prod is checked by `make slo`.
 - **Triage:** Bedrock is mocked in tests. A golden-file test makes sure every number and place name in the summary appears in the input signals.
