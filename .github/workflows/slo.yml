@@ -1,0 +1,36 @@
+name: slo
+
+# Dogfoods mcp-slo against the live MCP server. Keep concurrency x rate low:
+# the account's Lambda concurrency limit (10) is shared with the pipeline.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    paths: [.github/workflows/slo.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: slo
+  cancel-in-progress: false
+
+jobs:
+  slo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: Rohithvarma8/mcp-slo@v0.1.0
+        with:
+          url: ${{ vars.MCP_URL }}
+          concurrency: "2"
+          rate: "10"
+          duration: 20s
+          tool: get_active_incidents
+          args: "{}"
+          profile: alexa
+          slo: |
+            p95<500ms
+            errors<1%
+          artifact-name: mcp-slo-junit
