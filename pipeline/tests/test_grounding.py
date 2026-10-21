@@ -47,6 +47,52 @@ def test_invented_facts_are_rejected(text: str, violation: str) -> None:
     assert any(violation in v for v in result.violations), result.violations
 
 
+# Seen live on 2026-10-20 (Nova Lite and Claude Haiku 4.5 replays): a sentence ending in
+# "Ventura Counties." ran into the next sentence's first word ("Ventura Counties Winds").
+BOUNDARY = "Red Flag Warnings cover most of Los Angeles and Ventura Counties."
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"{BOUNDARY} Winds and low humidity make fires spread fast.",
+        f"{BOUNDARY} Use extreme caution with anything that could spark a fire.",
+        f"{BOUNDARY} If a fire starts, it could spread rapidly.",
+        f"{BOUNDARY} Conditions favor rapid fire growth.",
+    ],
+)
+def test_sentence_boundary_ends_a_name(text: str) -> None:
+    assert check([text], SOURCE).passed, check([text], SOURCE).violations
+
+
+def test_invented_name_after_a_sentence_boundary_is_rejected() -> None:
+    result = check([f"{BOUNDARY} Winds also reach Thousand Oaks."], SOURCE)
+    assert result.violations == ["name 'Thousand Oaks' not in source"]
+
+
+ABBREVIATION_SOURCE = "Smoke from a U.S. Forest Service burn near Mt. Pinos may drift east."
+
+
+@pytest.mark.parametrize(
+    "text", ["Smoke from the U.S. Forest Service burn may drift.", "Smoke near Mt. Pinos."]
+)
+def test_abbreviations_stay_part_of_a_name(text: str) -> None:
+    assert check([text], ABBREVIATION_SOURCE).passed, check([text], ABBREVIATION_SOURCE).violations
+
+
+@pytest.mark.parametrize(
+    ("text", "violation"),
+    [
+        ("Smoke from the U.S. Park Service burn may drift.", "name 'U.S. Park'"),
+        ("Smoke near Mt. Wilson.", "name 'Mt. Wilson'"),
+    ],
+)
+def test_invented_names_with_abbreviations_are_rejected(text: str, violation: str) -> None:
+    result = check([text], ABBREVIATION_SOURCE)
+    assert not result.passed
+    assert any(violation in v for v in result.violations), result.violations
+
+
 # --- replay strict mode -----------------------------------------------------------------
 
 
