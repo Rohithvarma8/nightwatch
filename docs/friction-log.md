@@ -29,6 +29,7 @@ Severity: **Blocker** (couldn't proceed) · **Major** (≥ 1 h lost / ugly worka
   3. For hackathons, auto-enable registered participants (or publish a dedicated access form on the Devpost Resources page).
   4. Have the CLI or docs detect this AccessDenied and print "Your AWS account isn't onboarded yet; request access at <link>" instead of a raw STS error.
 - **Evidence:** screenshots of "Coming Soon" page and DevAssistant conversation; terminal output above; case ID 96298466.
+- **Update 2026-10-20:** the hackathon organizers confirmed on the Devpost forum (topic 45262) that the Alexa+ developer tools are in partner preview and not available to hackathon participants, and that a self-built simulator or front end is the expected way to demo. We built `alexa-sim/` (a clearly labeled, unofficial simulated client that talks to the real deployed MCP server).
 
 ---
 

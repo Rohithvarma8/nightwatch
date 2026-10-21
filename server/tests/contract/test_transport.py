@@ -58,7 +58,8 @@ async def test_tools_list_matches_snapshot(mcp_client: ClientFactory) -> None:
     actual = [t.model_dump(mode="json", by_alias=True, exclude_none=True) for t in tools]
     if os.environ.get("UPDATE_SNAPSHOTS") == "1":
         SNAPSHOT.write_text(json.dumps(actual, indent=2, sort_keys=True) + "\n")
-    # Schema changes must be deliberate: update the snapshot AND run `alexa-ai deploy`.
+    # Schema changes must be deliberate: update the snapshot (and run `alexa-ai deploy` when
+    # Alexa+ onboarding becomes available).
     assert actual == json.loads(SNAPSHOT.read_text())
 
 

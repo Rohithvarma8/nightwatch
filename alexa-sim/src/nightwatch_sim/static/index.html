@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Watch · Simulated Assistant</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #07090d;
+    --panel: #10141b;
+    --line: #1f2630;
+    --text: #eef1f5;
+    --muted: #8a94a3;
+    --accent: #3fd1c2;
+    --warn: #f2b84b;
+    --bad: #f06a6a;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+
+  .label {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 10px 24px; border-bottom: 1px solid var(--line);
+    font-size: 14px; color: var(--warn); letter-spacing: .02em;
+  }
+  .label .meta { color: var(--muted); font-size: 12px; text-align: right; }
+
+  main {
+    flex: 1; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 32px; padding: 32px 40px 16px; min-height: 0;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 20px 16px; } }
+
+  .conv { display: flex; flex-direction: column; min-height: 0; }
+  .you { font-size: 22px; color: var(--muted); min-height: 1.4em; }
+  .you.interim { font-style: italic; opacity: .7; }
+  .reply { font-size: 38px; line-height: 1.25; font-weight: 500; margin: 18px 0 20px; min-height: 2.5em; }
+  .reply.idle { color: var(--muted); font-weight: 400; }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; min-height: 30px; }
+  .tool {
+    font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 5px 10px;
+    border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+  }
+  .tool b { color: var(--text); font-weight: 600; }
+  .tool.error { border-color: var(--bad); }
+  .tool.blocked { border-color: var(--warn); }
+  .timing { margin-top: 8px; font-size: 12px; color: var(--muted); min-height: 1.2em; }
+
+  details.history { margin-top: auto; padding-top: 20px; color: var(--muted); font-size: 15px; }
+  details.history summary { cursor: pointer; }
+  .history ol { list-style: none; padding: 0; margin: 10px 0 0; max-height: 30vh; overflow: auto; }
+  .history li { padding: 6px 0; border-top: 1px solid var(--line); }
+  .history .who { color: var(--accent); margin-right: 6px; }
+
+  .cardwrap { min-height: 0; overflow: auto; }
+  .cardwrap iframe { width: 100%; border: 0; height: 0; display: block; color-scheme: dark; }
+  .cardwrap .hint { color: var(--muted); font-size: 15px; border: 1px dashed var(--line); border-radius: 16px; padding: 24px; }
+
+  footer {
+    display: flex; align-items: center; gap: 16px; padding: 16px 40px 22px;
+    border-top: 1px solid var(--line); position: relative;
+  }
+  @media (max-width: 900px) { footer { padding: 12px 16px; } }
+  .glow { position: absolute; left: 0; right: 0; top: -1px; height: 3px; background: transparent; }
+  body.listening .glow { background: var(--accent); box-shadow: 0 0 18px 4px rgba(63,209,194,.55); animation: pulse 1.1s ease-in-out infinite; }
+  body.thinking .glow { background: linear-gradient(90deg, transparent, var(--accent), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: sweep 1.2s linear infinite; }
+  body.speaking .glow { background: var(--accent); opacity: .6; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @keyframes sweep { from { background-position: -50% 0; } to { background-position: 150% 0; } }
+
+  .mic {
+    flex: none; width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--line);
+    background: var(--panel); color: var(--text); cursor: pointer; display: grid; place-items: center;
+  }
+  .mic svg { width: 28px; height: 28px; }
+  body.listening .mic { border-color: var(--accent); box-shadow: 0 0 0 6px rgba(63,209,194,.18); }
+  .mic:disabled { opacity: .4; cursor: not-allowed; }
+  .state { width: 110px; font-size: 14px; color: var(--muted); }
+  form { flex: 1; display: flex; gap: 10px; min-width: 0; }
+  input[type=text] {
+    flex: 1; min-width: 0; font-size: 20px; padding: 14px 18px; border-radius: 14px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text); font-family: inherit;
+  }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button.text { font-size: 16px; padding: 0 18px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; }
+  .opts { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+  .opts label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .opts button { all: unset; cursor: pointer; text-decoration: underline; }
+</style>
+</head>
+<body>
+  <div class="label" role="note">
+    <span>Simulated Alexa+ client (unofficial) · real Night Watch MCP server on AWS.</span>
+    <span class="meta" id="meta">connecting…</span>
+  </div>
+
+  <main>
+    <section class="conv" aria-live="polite">
+      <div class="you" id="you"></div>
+      <div class="reply idle" id="reply">Try "What's going on?"</div>
+      <div class="tools" id="tools" aria-label="Tools called"></div>
+      <div class="timing" id="timing"></div>
+      <details class="history">
+        <summary>Transcript</summary>
+        <ol id="history"></ol>
+      </details>
+    </section>
+    <section class="cardwrap" id="cardwrap" aria-label="Incident card">
+      <div class="hint" id="cardhint">The incident card appears here when a tool returns one.</div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="glow"></div>
+    <button class="mic" id="mic" type="button" title="Talk (Chrome speech input)" aria-label="Talk">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+    <div class="state" id="state">Ready</div>
+    <form id="form" autocomplete="off">
+      <input type="text" id="text" placeholder="Type or press the mic…" maxlength="500">
+      <button class="text" type="submit">Send</button>
+    </form>
+    <div class="opts">
+      <label><input type="checkbox" id="speak" checked> Speak replies</label>
+      <button type="button" id="reset">New conversation</button>
+    </div>
+  </footer>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var busy = false;
+
+  // ---- session (per tab) ----
+  function newId() { return (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()).replace(/-/g, ""); }
+  var sessionId;
+  try { sessionId = sessionStorage.getItem("nw-session"); } catch (e) {}
+  if (!sessionId) { sessionId = newId(); try { sessionStorage.setItem("nw-session", sessionId); } catch (e) {} }
+
+  function setState(name, label) {
+    document.body.classList.remove("listening", "thinking", "speaking");
+    if (name) document.body.classList.add(name);
+    $("state").textContent = label || "Ready";
+  }
+
+  function addHistory(who, text) {
+    var li = document.createElement("li");
+    var w = document.createElement("span"); w.className = "who"; w.textContent = who;
+    li.appendChild(w); li.appendChild(document.createTextNode(text));
+    $("history").appendChild(li);
+    li.scrollIntoView({ block: "nearest" });
+  }
+
+  fetch("/api/status").then(function (r) { return r.json(); }).then(function (s) {
+    $("meta").textContent = s.mcp_host + " · " + s.tools.length + " tools · " + s.model.replace(/^us\./, "");
+  }).catch(function () { $("meta").textContent = "backend not reachable"; });
+
+  // ---- turns ----
+  var audio = null;
+  function stopAudio() { if (audio) { audio.pause(); audio = null; } }
+
+  function send(text) {
+    text = text.trim();
+    if (!text || busy) return;
+    busy = true;
+    stopAudio();
+    $("you").classList.remove("interim");
+    $("you").textContent = "“" + text + "”";
+    $("reply").textContent = ""; $("reply").classList.remove("idle");
+    $("tools").textContent = ""; $("timing").textContent = "";
+    addHistory("You", text);
+    setState("thinking", "Thinking…");
+    fetch("/api/turn", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, text: text, speak: $("speak").checked })
+    }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }).then(function (t) {
+      $("reply").textContent = t.reply;
+      addHistory("Assistant", t.reply);
+      renderTools(t);
+      if (t.card) showCard(t.card);
+      if (t.audio) {
+        audio = new Audio("data:audio/mpeg;base64," + t.audio);
+        setState("speaking", "Speaking");
+        audio.onended = function () { setState(null); };
+        audio.play().catch(function () { setState(null); });
+      } else {
+        setState(null);
+      }
+    }).catch(function (e) {
+      $("reply").textContent = "The simulator backend didn't answer (" + e.message + ").";
+      setState(null);
+    }).finally(function () { busy = false; });
+  }
+
+  function renderTools(t) {
+    var strip = $("tools");
+    var mcp = 0;
+    (t.tools || []).forEach(function (c) {
+      var chip = document.createElement("span");
+      chip.className = "tool " + c.status;
+      var b = document.createElement("b"); b.textContent = c.name;
+      chip.appendChild(b);
+      var tail = c.status === "blocked" ? " · held for yes" : " · " + c.latency_ms + " ms" + (c.status === "error" ? " · error" : "");
+      chip.appendChild(document.createTextNode(tail));
+      chip.title = JSON.stringify(c.arguments);
+      strip.appendChild(chip);
+      mcp += c.latency_ms;
+    });
+    if (!(t.tools || []).length) {
+      var none = document.createElement("span"); none.className = "tool"; none.textContent = "no tools called";
+      strip.appendChild(none);
+    }
+    var parts = ["turn " + t.total_ms + " ms", "MCP " + mcp + " ms", "model " + t.model.replace(/^us\./, "")];
+    if (t.tts_ms != null) parts.push("Polly " + t.tts_ms + " ms");
+    if (t.error) parts.push("error: " + t.error);
+    $("timing").textContent = parts.join(" · ");
+  }
+
+  $("form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = $("text").value; $("text").value = ""; send(v);
+  });
+  $("reset").addEventListener("click", function () {
+    fetch("/api/reset", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session_id: sessionId }) });
+    sessionId = newId(); try { sessionStorage.setItem("nw-session", sessionId); } catch (e) {}
+    stopAudio(); setState(null);
+    $("history").textContent = ""; $("you").textContent = ""; $("tools").textContent = ""; $("timing").textContent = "";
+    $("reply").textContent = "New conversation."; $("reply").classList.add("idle");
+  });
+
+  // ---- speech input (Web Speech API; Chrome) ----
+  var Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var rec = null, listening = false;
+  if (!Recognition) {
+    $("mic").disabled = true; $("mic").title = "Speech input needs Chrome; type instead.";
+  } else {
+    rec = new Recognition();
+    rec.lang = "en-US"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    var finalText = "";
+    rec.onstart = function () { listening = true; finalText = ""; setState("listening", "Listening…"); };
+    rec.onresult = function (e) {
+      var interim = "";
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      $("you").classList.add("interim");
+      $("you").textContent = finalText + interim;
+    };
+    rec.onerror = function (e) { $("state").textContent = "Mic: " + e.error; };
+    rec.onend = function () {
+      listening = false;
+      if (finalText.trim()) send(finalText); else if (!busy) setState(null);
+    };
+  }
+  function toggleMic() {
+    if (!rec || busy) return;
+    if (listening) { rec.stop(); return; }
+    stopAudio();
+    try { rec.start(); } catch (e) {}
+  }
+  $("mic").addEventListener("click", toggleMic);
+  document.addEventListener("keydown", function (e) {  // Space to talk when the text box isn't focused
+    if (e.code === "Space" && document.activeElement !== $("text") && !e.repeat) { e.preventDefault(); toggleMic(); }
+  });
+
+  // ---- minimal MCP Apps host (2026-01-26): resources/read → sandboxed iframe → handshake ----
+  var HOST_PROTOCOL = "2026-01-26";
+  var resources = {};
+  var view = null;  // { iframe, card, initialized }
+
+  function getResource(uri) {
+    if (!resources[uri]) {
+      resources[uri] = fetch("/api/resource?uri=" + encodeURIComponent(uri)).then(function (r) {
+        if (!r.ok) throw new Error("resources/read HTTP " + r.status);
+        return r.json();
+      });
+      resources[uri].catch(function () { delete resources[uri]; });
+    }
+    return resources[uri];
+  }
+
+  // Default-deny CSP: inline script/style only, no network (the card declares no csp domains).
+  var CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:";
+  function withCsp(html) {
+    var meta = '<meta http-equiv="Content-Security-Policy" content="' + CSP + '">';
+    return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, function (m) { return m + meta; }) : meta + html;
+  }
+
+  function toView(message) { if (view) view.iframe.contentWindow.postMessage(message, "*"); }
+
+  function teardown(old) {
+    var done = false;
+    function remove() { if (!done) { done = true; old.iframe.remove(); } }
+    old.teardownId = "teardown-" + Date.now();
+    try { old.iframe.contentWindow.postMessage({ jsonrpc: "2.0", id: old.teardownId, method: "ui/resource-teardown", params: {} }, "*"); } catch (e) {}
+    old.onTeardown = remove;
+    setTimeout(remove, 500);
+  }
+
+  var retiring = [];
+  function showCard(card) {
+    getResource(card.uri).then(function (res) {
+      var mime = (res.mimeType || "").split(";")[0].trim();
+      if (mime !== "text/html") throw new Error("unsupported UI resource type " + res.mimeType);
+      $("cardhint").style.display = "none";
+      if (view) { retiring.push(view); teardown(view); }
+      var iframe = document.createElement("iframe");
+      iframe.setAttribute("sandbox", "allow-scripts");  // opaque origin: no cookies, storage, or parent access
+      iframe.setAttribute("title", "Night Watch incident card");
+      iframe.setAttribute("referrerpolicy", "no-referrer");
+      iframe.srcdoc = withCsp(res.text);
+      view = { iframe: iframe, card: card, initialized: false };
+      $("cardwrap").appendChild(iframe);
+    }).catch(function (e) {
+      $("cardhint").style.display = ""; $("cardhint").textContent = "Card failed to load: " + e.message;
+    });
+  }
+
+  function hostContext() {
+    return {
+      theme: "dark",
+      displayMode: "inline",
+      availableDisplayModes: ["inline"],
+      platform: "web",
+      locale: navigator.language || "en-US",
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      containerDimensions: { maxWidth: Math.round($("cardwrap").clientWidth) }
+    };
+  }
+
+  window.addEventListener("message", function (event) {
+    var msg = event.data;
+    if (!msg || msg.jsonrpc !== "2.0") return;
+    for (var i = 0; i < retiring.length; i++) {  // teardown acknowledgements from replaced views
+      var old = retiring[i];
+      if (event.source === old.iframe.contentWindow) {
+        if (msg.id === old.teardownId && old.onTeardown) { old.onTeardown(); retiring.splice(i, 1); }
+        return;
+      }
+    }
+    if (!view || event.source !== view.iframe.contentWindow) return;
+    if (msg.method === "ui/initialize" && msg.id != null) {
+      toView({ jsonrpc: "2.0", id: msg.id, result: {
+        protocolVersion: HOST_PROTOCOL,
+        hostInfo: { name: "nightwatch-alexa-sim", version: "0.1.0" },
+        hostCapabilities: {},
+        hostContext: hostContext()
+      }});
+    } else if (msg.method === "ui/notifications/initialized") {
+      view.initialized = true;
+      toView({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: view.card.arguments || {} } });
+      toView({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: view.card.result });
+    } else if (msg.method === "ui/notifications/size-changed") {
+      var h = msg.params && msg.params.height;
+      if (typeof h === "number" && h > 0) view.iframe.style.height = Math.min(Math.ceil(h), 4000) + "px";
+    } else if (msg.method && msg.id != null) {
+      toView({ jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "Not supported by this host" } });
+    }
+  });
+})();
+</script>
+</body>
+</html>
