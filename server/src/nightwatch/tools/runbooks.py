@@ -3,12 +3,13 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.apps import Apps
 from mcp_types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
 
 from nightwatch.domain.incidents import IncidentSource, inline_title, sentence
 from nightwatch.domain.runbooks import Runbook, runbook_for
+from nightwatch.tools.card import CARD_URI
 from nightwatch.tools.common import error, resolve_incident
 
 DESCRIPTION = (
@@ -33,9 +34,13 @@ class RunbookView(BaseModel):
     incident_title: str
     next_step: str
     steps: list[RunbookStepView]
+    household: str  # card header, like get_active_incidents
+    as_of: str
 
 
-def _view(book: Runbook, incident_id: str, incident_title: str) -> RunbookView:
+def _view(
+    book: Runbook, incident_id: str, incident_title: str, household: str = "", as_of: str = ""
+) -> RunbookView:
     steps = [
         RunbookStepView(n=n, action=s.action, why=s.why, done=False)
         for n, s in enumerate(book.steps, start=1)
@@ -47,6 +52,8 @@ def _view(book: Runbook, incident_id: str, incident_title: str) -> RunbookView:
         incident_title=incident_title,
         next_step=steps[0].action,
         steps=steps,
+        household=household,
+        as_of=as_of,
     )
 
 
@@ -62,8 +69,9 @@ def _spoken(view: RunbookView, heading: str) -> str:
     return text + f" That's {len(view.steps)} steps in all."
 
 
-def register(server: MCPServer, source: IncidentSource, runbooks: dict[str, Runbook]) -> None:
-    @server.tool(
+def register(apps: Apps, source: IncidentSource, runbooks: dict[str, Runbook]) -> None:
+    @apps.tool(
+        resource_uri=CARD_URI,
         name="get_runbook",
         title="Runbook for an incident",
         description=DESCRIPTION,
@@ -94,7 +102,8 @@ def register(server: MCPServer, source: IncidentSource, runbooks: dict[str, Runb
         book = runbook_for(incident, runbooks)
         if book is None:
             return error(f"I don't have a runbook for the {inline_title(incident)} yet.")
-        view = _view(book, incident.id, incident.title)
+        as_of = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        view = _view(book, incident.id, incident.title, source.household_name(), as_of)
         return CallToolResult(
             content=[TextContent(type="text", text=_spoken(view, inline_title(incident).lower()))],
             structured_content=view.model_dump(mode="json"),

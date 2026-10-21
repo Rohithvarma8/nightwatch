@@ -17,6 +17,7 @@ def register(apps: Apps) -> None:
         card_html(),
         name="incidents",
         title="Night Watch incident card",
-        description="Severity, summary, top action, evidence, status, and escalation countdown.",
+        description="Severity, summary, top action, evidence, status, and escalation countdown; "
+        "or a runbook checklist with the next step.",
         prefers_border=True,
     )

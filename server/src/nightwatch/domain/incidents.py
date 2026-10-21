@@ -1,9 +1,11 @@
 """Ranking, replay rules, and spoken formatting for active incidents. Pure (no I/O)."""
 
 import re
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import Protocol
 
+from nightwatch.domain.dedupe import covers
 from nightwatch.domain.models import (
     SEVERITY_RANK,
     ActiveIncidents,
@@ -122,7 +124,26 @@ def deploy_versions(incident: Incident) -> str | None:
     return None
 
 
-def to_view(incident: Incident) -> IncidentView:
+def spoken_action(incident: Incident) -> str:
+    """The top action to read after the summary, or "" when the summary already says it."""
+    action = incident.top_action
+    return "" if not action or covers(incident.spoken_summary, action, incident.title) else action
+
+
+def do_now(incident: Incident, fallbacks: Sequence[str] = ()) -> str:
+    """The card's "Do now": the first action (then runbook step) the summary doesn't already say.
+
+    Prod keeps its top action: the rules pin rollback there.
+    """
+    if incident.kind == "prod" or not incident.top_action:
+        return incident.top_action
+    for action in [*incident.recommended_actions, *fallbacks]:
+        if not covers(incident.spoken_summary, action, incident.title):
+            return action
+    return ""
+
+
+def to_view(incident: Incident, fallbacks: Sequence[str] = ()) -> IncidentView:
     return IncidentView(
         id=incident.id,
         kind=incident.kind,
@@ -131,7 +152,7 @@ def to_view(incident: Incident) -> IncidentView:
         status=incident.status,
         started_at=incident.started_at,
         spoken_summary=incident.spoken_summary,
-        top_action=incident.top_action,
+        top_action=do_now(incident, fallbacks),
         evidence_preview=[e.detail for e in incident.evidence[:EVIDENCE_PREVIEW]],
         deploy_versions=deploy_versions(incident),
         escalation_due_at=incident.escalation_due_at if incident.status == "open" else None,
@@ -140,8 +161,8 @@ def to_view(incident: Incident) -> IncidentView:
     )
 
 
-def spoken_overview(incidents: list[IncidentView]) -> str:
-    """Short text Alexa can speak from. Never includes IDs."""
+def spoken_overview(incidents: list[Incident]) -> str:
+    """Short text Alexa can speak from. Never includes IDs or a caution the summary already has."""
     if not incidents:
         return "All clear. No active incidents right now."
     lead = _COUNT_WORDS[len(incidents)] if len(incidents) < len(_COUNT_WORDS) else "Several things"
@@ -149,19 +170,22 @@ def spoken_overview(incidents: list[IncidentView]) -> str:
     for n, inc in enumerate(incidents, start=1):
         status = f", {inc.status}" if inc.status in ("acknowledged", "escalated") else ""
         line = f"{n}. {spoken_title(inc)}, {inc.severity}{status}: {sentence(inc.spoken_summary)}"
-        if inc.top_action:
-            line += f" {sentence(inc.top_action)}"
+        if action := spoken_action(inc):
+            line += f" {sentence(action)}"
         parts.append(line)
     return " ".join(parts)
 
 
 def build_active_incidents(
-    incidents: list[Incident], household: str, as_of: str
+    incidents: list[Incident],
+    household: str,
+    as_of: str,
+    fallbacks: Callable[[Incident], Sequence[str]] = lambda _: (),
 ) -> ActiveIncidents:
-    views = [to_view(i) for i in incidents]
+    views = [to_view(i, fallbacks(i)) for i in incidents]
     return ActiveIncidents(
         as_of=as_of,
         household=household,
-        spoken_overview=spoken_overview(views),
+        spoken_overview=spoken_overview(incidents),
         incidents=views,
     )

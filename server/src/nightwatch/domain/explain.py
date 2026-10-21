@@ -1,12 +1,14 @@
 """explain_incident output: what happened, what it means, evidence, confidence, timeline."""
 
+import re
+from collections.abc import Sequence
 from typing import Literal
 
 from pydantic import BaseModel
 
-from nightwatch.domain.incidents import sentence, spoken_title, to_view
+from nightwatch.domain.incidents import sentence, spoken_action, spoken_title, to_view
 from nightwatch.domain.models import IncidentView
-from nightwatch_core.models import Incident
+from nightwatch_core.models import Incident, SignalRef
 
 Depth = Literal["brief", "full"]
 Confidence = Literal["high", "medium", "low"]
@@ -30,6 +32,9 @@ _MEANING: dict[str, str] = {
     "other": "The National Weather Service has issued an alert for your area.",
 }
 _VERB = {"Alert": "issued", "Update": "updated", "Cancel": "cancelled"}
+_ALARM_VERB = {"Alert": "went into ALARM", "Cancel": "returned to OK"}
+# prod.normalize_deploy headline: "Deployment d-… of checkout-service from version 4 to 5 …"
+_DEPLOY = re.compile(r"\bof (?P<service>\S+) from version (?P<old>\w+) to (?P<new>\w+)")
 BRIEF_EVIDENCE = 2
 BRIEF_TIMELINE = 3
 
@@ -58,6 +63,8 @@ class Explanation(BaseModel):
     replay: bool
     replay_original_time: str | None
     incident: IncidentView  # the card's view of this incident (severity, status, countdown)
+    household: str  # card header, like get_active_incidents
+    as_of: str
 
 
 def _meaning_key(incident: Incident) -> str:
@@ -80,28 +87,41 @@ def confidence(incident: Incident) -> Confidence:
     return "low"
 
 
+def timeline_event(ref: SignalRef) -> str:
+    """Per-source wording: alarms change state, deployments finish, NWS issues alerts."""
+    if ref.source == "cloudwatch":
+        verb = _ALARM_VERB.get(ref.message_type or "", "changed state")
+        return f"{ref.event or 'CloudWatch'} alarm {verb}"
+    if ref.source == "codedeploy":
+        m = _DEPLOY.search(ref.summary)
+        if m:
+            return f"Deployment v{m['old']}→v{m['new']} of {m['service']} finished"
+        return "Deployment finished"
+    verb = _VERB.get(ref.message_type or "", "reported")
+    return f"{_SOURCE_NAMES.get(ref.source, ref.source)} {verb} {ref.event or ref.summary}"
+
+
 def timeline(incident: Incident) -> list[TimelineEntry]:
-    entries = [
-        TimelineEntry(
-            at=r.observed_at,
-            event=f"{_SOURCE_NAMES.get(r.source, r.source)} "
-            f"{_VERB.get(r.message_type or '', 'reported')} {r.event or r.summary}",
-        )
-        for r in incident.signals
-    ]
+    entries = [TimelineEntry(at=r.observed_at, event=timeline_event(r)) for r in incident.signals]
     if incident.resolved_at:
         entries.append(TimelineEntry(at=incident.resolved_at, event="Incident resolved"))
     return sorted(entries, key=lambda e: e.at)
 
 
-def explain(incident: Incident, depth: Depth) -> Explanation:
+def explain(
+    incident: Incident,
+    depth: Depth,
+    household: str = "",
+    as_of: str = "",
+    fallbacks: Sequence[str] = (),
+) -> Explanation:
     evidence = [EvidenceItem(**e.model_dump()) for e in incident.evidence]
     events = timeline(incident)
     if depth == "brief":
         evidence, events = evidence[:BRIEF_EVIDENCE], events[-BRIEF_TIMELINE:]
     meaning = _MEANING[_meaning_key(incident)]
-    if incident.top_action:
-        meaning = f"{meaning} {sentence(incident.top_action)}"
+    if action := spoken_action(incident):  # not when the summary already says it
+        meaning = f"{meaning} {sentence(action)}"
     return Explanation(
         id=incident.id,
         title=incident.title,
@@ -113,7 +133,9 @@ def explain(incident: Incident, depth: Depth) -> Explanation:
         sources=sorted({_SOURCE_NAMES.get(r.source, r.source) for r in incident.signals}),
         replay=incident.replay,
         replay_original_time=incident.replay_original_time,
-        incident=to_view(incident),
+        incident=to_view(incident, fallbacks),
+        household=household,
+        as_of=as_of,
     )
 
 

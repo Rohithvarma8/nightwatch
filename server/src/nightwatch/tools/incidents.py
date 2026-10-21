@@ -15,6 +15,7 @@ from nightwatch.domain.incidents import (
     select_active,
 )
 from nightwatch.domain.models import ActiveIncidents, Scope, Severity
+from nightwatch.domain.runbooks import Runbook, step_actions
 from nightwatch.tools.card import CARD_URI
 
 DESCRIPTION = (
@@ -26,7 +27,7 @@ DESCRIPTION = (
 )
 
 
-def register(apps: Apps, source: IncidentSource) -> None:
+def register(apps: Apps, source: IncidentSource, runbooks: dict[str, Runbook]) -> None:
     @apps.tool(
         resource_uri=CARD_URI,
         name="get_active_incidents",
@@ -55,7 +56,9 @@ def register(apps: Apps, source: IncidentSource) -> None:
         ranked = overview(source.active_incidents(now), now)
         selected = select_active(ranked, scope, min_severity, limit)
         as_of = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-        result = build_active_incidents(selected, source.household_name(), as_of)
+        result = build_active_incidents(
+            selected, source.household_name(), as_of, lambda i: step_actions(i, runbooks)
+        )
         return CallToolResult(
             content=[TextContent(type="text", text=result.spoken_overview)],
             structured_content=result.model_dump(mode="json"),

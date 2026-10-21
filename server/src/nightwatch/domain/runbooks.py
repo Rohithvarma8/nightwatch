@@ -67,3 +67,9 @@ def runbook_for(incident: Incident, runbooks: dict[str, Runbook]) -> Runbook | N
         if found:
             return found
     return None
+
+
+def step_actions(incident: Incident, runbooks: dict[str, Runbook]) -> list[str]:
+    """The matched runbook's step actions: "Do now" candidates after the incident's own actions."""
+    book = runbook_for(incident, runbooks)
+    return [s.action for s in book.steps] if book else []

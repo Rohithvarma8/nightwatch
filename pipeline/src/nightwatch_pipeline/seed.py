@@ -39,20 +39,26 @@ DEMO_POLICY = EscalationPolicy(
 )
 
 
+def seed(store: Store, contact_email: str | None, ack_timeout_s: int) -> str:
+    household = DEMO_HOUSEHOLD.model_copy(update={"ack_timeout_s": ack_timeout_s})
+    store.put_household(household)
+    store.put_contact(demo_contact(contact_email))
+    store.put_policy(DEMO_POLICY)
+    email = "with email" if contact_email else "push only"
+    return (
+        f"seeded {household.id} ({household.name}), contact Priya ({email}), "
+        f"escalation policy (high+, {household.ack_timeout_s}s)"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--table", required=True)
     parser.add_argument("--contact-email", default=None, help="Priya's email (from tfvars)")
+    parser.add_argument("--ack-timeout-s", type=int, default=DEMO_HOUSEHOLD.ack_timeout_s)
     args = parser.parse_args()
-    store = Store(args.table)
-    store.put_household(DEMO_HOUSEHOLD)
-    store.put_contact(demo_contact(args.contact_email or None))
-    store.put_policy(DEMO_POLICY)
-    email = "with email" if args.contact_email else "push only"
-    print(
-        f"seeded {DEMO_HOUSEHOLD.id} ({DEMO_HOUSEHOLD.name}), contact Priya ({email}), "
-        f"escalation policy (high+, {DEMO_HOUSEHOLD.ack_timeout_s}s) into {args.table}"
-    )
+    seeded = seed(Store(args.table), args.contact_email or None, args.ack_timeout_s)
+    print(f"{seeded} into {args.table}")
 
 
 if __name__ == "__main__":

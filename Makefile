@@ -8,8 +8,13 @@ TF_DEV  := infra/envs/dev
 WARM_TFVARS := $(TF_DEV)/warm.auto.tfvars
 AWS_ENV := AWS_PROFILE=nightwatch AWS_DEFAULT_REGION=us-west-2
 TF_OUT   = terraform -chdir=$(CURDIR)/$(TF_DEV) output -raw
+ARCHIVE ?= $(HOME)/nightwatch-alert-archive/archive/nws
+# Archived CAZ374 alerts with overlapping windows (replays shift both to start now).
+DEMO_RFW  ?= $(ARCHIVE)/2026-10-15/b63ffdcd0a37ca41.json
+DEMO_WIND ?= $(ARCHIVE)/2026-10-15/12b2ec5050ef9a56.json
+ACK_TIMEOUT_S ?= 120
 
-.PHONY: setup lint test run inspect build deploy warm-on warm-off seed-household replay reset-incidents smoke bad-deploy good-deploy sim sim-smoke
+.PHONY: setup lint test run inspect build deploy warm-on warm-off seed-household replay reset-incidents smoke bad-deploy good-deploy sim sim-smoke demo-reset demo-prod demo-prod-off
 
 setup:  ## Install deps for shared/, pipeline/, server/ (uv)
 	for p in $(PACKAGES); do (cd $$p && uv sync --all-extras) || exit 1; done
@@ -51,7 +56,7 @@ warm-off: build  ## OPTIONAL: provisioned concurrency = 0 (back to on-demand, no
 
 seed-household:  ## Write the demo household (Simi Valley, CAZ374), contact Priya, and escalation policy
 	cd pipeline && $(AWS_ENV) uv run python -m nightwatch_pipeline.seed --table $$($(TF_OUT) table_name) \
-		--contact-email "$$($(TF_OUT) contact_email)"
+		--contact-email "$$($(TF_OUT) contact_email)" --ack-timeout-s $(ACK_TIMEOUT_S)
 
 replay:  ## Replay one archived NWS alert through the bus: make replay FILE=~/nightwatch-alert-archive/archive/nws/<day>/<id>.json
 	@test -n "$(FILE)" || (echo "usage: make replay FILE=<alert.json>"; exit 1)
@@ -64,6 +69,20 @@ reset-incidents:  ## DEV ONLY: delete incidents, OPENKEYs, and signal records (k
 
 smoke:  ## Post-deploy smoke test: replay one alert end to end; fail on any builder/triage/notifier/escalation Lambda error
 	$(AWS_ENV) scripts/smoke.sh $(FILE)
+
+demo-reset:  ## DEV ONLY: reset incidents, re-seed, replay RFW + Wind Advisory → one open Fire risk (ACK_TIMEOUT_S=120)
+	cd pipeline && $(AWS_ENV) uv run python -m nightwatch_pipeline.demo_reset --confirm \
+		--table $$($(TF_OUT) table_name) --bus $$($(TF_OUT) bus_name) \
+		--contact-email "$$($(TF_OUT) contact_email)" --ack-timeout-s $(ACK_TIMEOUT_S) \
+		--rfw "$(DEMO_RFW)" --wind "$(DEMO_WIND)"
+	@scripts/mcp_overview.sh "$$($(TF_OUT) mcp_url)"
+
+demo-prod:  ## Load generator on (interactive apply) → stable baseline → bad deploy; prints when ALARM is expected
+	scripts/demo_prod.sh
+
+demo-prod-off:  ## Load generator off (interactive apply)
+	sed -i '' -E 's/^(loadgen_enabled *= *)true/\1false/' $(TF_DEV)/terraform.tfvars
+	terraform -chdir=$(TF_DEV) apply
 
 bad-deploy:  ## Deploy checkout-service with the latency regression (CodeDeploy, AllAtOnce); prints the deployment ID
 	scripts/deploy_checkout.sh bad

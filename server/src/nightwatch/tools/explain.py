@@ -9,6 +9,7 @@ from pydantic import Field
 
 from nightwatch.domain.explain import Depth, Explanation, explain, spoken_explanation
 from nightwatch.domain.incidents import IncidentSource
+from nightwatch.domain.runbooks import Runbook, step_actions
 from nightwatch.tools.card import CARD_URI
 from nightwatch.tools.common import resolve_incident
 
@@ -21,7 +22,7 @@ DESCRIPTION = (
 )
 
 
-def register(apps: Apps, source: IncidentSource) -> None:
+def register(apps: Apps, source: IncidentSource, runbooks: dict[str, Runbook]) -> None:
     @apps.tool(
         resource_uri=CARD_URI,
         name="explain_incident",
@@ -55,7 +56,13 @@ def register(apps: Apps, source: IncidentSource) -> None:
         incident = resolve_incident(source, now, incident_id, reference)
         if isinstance(incident, CallToolResult):
             return incident
-        exp = explain(incident, depth)
+        exp = explain(
+            incident,
+            depth,
+            household=source.household_name(),
+            as_of=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            fallbacks=step_actions(incident, runbooks),
+        )
         return CallToolResult(
             content=[TextContent(type="text", text=spoken_explanation(incident, exp))],
             structured_content=exp.model_dump(mode="json"),
