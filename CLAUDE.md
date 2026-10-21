@@ -33,7 +33,7 @@ demo-service/ checkout Lambda + loadgen + bad/good deploy scripts
 runbooks/    YAML runbooks     replay/scenarios/  recorded real payloads
 infra/       Terraform: bootstrap/, modules/*, envs/dev/
 alexa-sim/   simulated Alexa+ client (unofficial, local only): Strands agent + smart-display page + MCP Apps host
-addon/       (not created) Alexa+ add-on package, when Alexa+ onboarding becomes available
+addon/       draft addon.json (Quickstart schema, placeholder URLs); deploy when Alexa+ onboarding opens
 site/        privacy, terms, icons, carousel (served by CloudFront)
 docs/        architecture, friction-log, product-feedback, devpost, devlog
 ```
