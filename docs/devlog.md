@@ -71,3 +71,11 @@
 - `addon/addon.json` is drafted from the Alexa+ MCP Quickstart's "addon.json schema reference": name, descriptions, 4 example phrases, and the live endpoint. Privacy, terms, icon and carousel URLs are placeholders. Ready for `alexa-ai deploy` when onboarding opens.
 - Verified before merging: `addon.json` matches the Quickstart page's documented schema field for field, and all limits hold (name 11/30, short 112/123, full 625/4000, 4 phrases ≤ 39 characters, 6 light icon sizes, a 600×900 carousel image). The README's Inspector `--cli` command works against the live URL.
 - Not shipped: the auth spike (DESIGN.md §6). There's no auth middleware, so the server is open (`AUTH_MODE` and `middleware/auth.py` in CLAUDE.md describe the plan, not the code). The README says auth is off.
+
+### 2026-10-23 · Teardown after the hackathon
+- Exported the DynamoDB table (26 items) and all 9 Lambda log groups (35,015 events, 9.3 MB) to a local folder outside the repo first, because the logs may contain the ntfy topic or contact email.
+- `terraform destroy` with a saved plan: **85 destroyed**, no errors. That covered: all 9 Lambdas (with their published versions), both HTTP APIs (MCP and checkout-service), the `nightwatch` EventBridge bus, 4 rules and 3 Scheduler schedules, the DynamoDB table, SNS topic + subscription, SES identity, SSM `/nightwatch/ntfy-topic`, the CodeDeploy app + group, the p95 alarm, 13 IAM roles + 16 policies, and 9 log groups. There were no `nw-esc-*` escalation schedules left (they delete themselves after firing), and no orphaned log groups or resources outside state.
+- IAM: deleted user `alexa-ai-tools` (inline policy, access key, and the `rohith-duo` virtual MFA device). Deactivated `terraform-user`'s access key (last used 2026-06-03, before this project). `badri-admin` is unchanged.
+- GitHub: the `slo` workflow is disabled and the `MCP_URL` variable is deleted.
+- Kept: the Terraform state bucket `nightwatch-tfstate-946509368103` (7.2 MB, versioned, `prevent_destroy`) until it's decided whether to remove it.
+- The live URL `https://2wj4gc9lz8.execute-api.us-west-2.amazonaws.com/mcp` no longer exists. The README now says to deploy your own.

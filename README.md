@@ -83,7 +83,7 @@ Requirements are from Amazon's
 | Round trip < 500 ms (warm) | **p95 89 ms** from a GitHub runner (mcp-slo in CI: 2 workers, 10 req/s, 0% errors). **p95 137 ms** from a laptop in an mcp-slo run (15 req/s, 456 requests). Single calls with curl: 0.14–0.25 s |
 | Cold starts | **1.8–2.1 s** round trip on a cold Lambda (Init 1.1–1.5 s, about 0.9 s of it importing the MCP SDK, [FL-006](docs/friction-log.md)). Warmed by hand before recording. `make warm-on` sets provisioned concurrency = 1 if always-warm is needed |
 
-The SLO is checked on every push to `main` by [mcp-slo](https://github.com/Rohithvarma8/mcp-slo)
+Until the post-hackathon teardown, the SLO was checked on every push to `main` by [mcp-slo](https://github.com/Rohithvarma8/mcp-slo)
 ([workflow](.github/workflows/slo.yml)) with `--profile alexa`: p95 < 500 ms, errors < 1%, the protocol
 negotiation matrix, and a GET that doesn't hang.
 
@@ -108,21 +108,24 @@ Everything is Terraform ([`infra/`](infra/)).
 
 ## How to try it
 
-**a) MCP Inspector against the live server (no AWS account needed)**
+> **The live demo server was taken down after the hackathon; deploy your own with `make deploy`.**
+> The numbers above were measured on it before the teardown (see the [devlog](docs/devlog.md)).
+
+**a) MCP Inspector** *(unavailable against the original live URL, which was taken down; point it at your own deployment's URL from `make deploy`)*
 
 ```sh
 npx @modelcontextprotocol/inspector
-# Transport: Streamable HTTP · URL: https://2wj4gc9lz8.execute-api.us-west-2.amazonaws.com/mcp
+# Transport: Streamable HTTP · URL: <your MCP URL>
 ```
 
 or from the command line:
 
 ```sh
-npx @modelcontextprotocol/inspector --cli https://2wj4gc9lz8.execute-api.us-west-2.amazonaws.com/mcp \
+npx @modelcontextprotocol/inspector --cli <your MCP URL> \
   --transport http --method tools/call --tool-name get_active_incidents
 ```
 
-Please stick to the read tools (`get_active_incidents`, `explain_incident`, `get_runbook`). The write
+On a shared deployment, stick to the read tools (`get_active_incidents`, `explain_incident`, `get_runbook`). The write
 tools have real side effects: they notify the demo contact, and `rollback_deploy` starts a CodeDeploy
 deployment.
 
@@ -134,9 +137,9 @@ Needs `uv` and AWS credentials with Bedrock `InvokeModel` (Claude Haiku 4.5 and/
 ```sh
 make sim       # with access to this repo's Terraform state: http://localhost:8765 (Chrome; allow the mic)
 
-# without it, point the simulator at the live URL directly:
+# or point the simulator at any deployment's URL directly:
 cd alexa-sim && uv sync
-MCP_URL=https://2wj4gc9lz8.execute-api.us-west-2.amazonaws.com/mcp AWS_REGION=us-west-2 \
+MCP_URL=<your MCP URL> AWS_REGION=us-west-2 \
   uv run uvicorn nightwatch_sim.app:app --host 127.0.0.1 --port 8765
 ```
 
