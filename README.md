@@ -1,6 +1,5 @@
 # Night Watch
 
-[![SLO](https://github.com/Rohithvarma8/nightwatch/actions/workflows/slo.yml/badge.svg)](https://github.com/Rohithvarma8/nightwatch/actions/workflows/slo.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 **One incident engine for home emergencies and production on-call.** It's 3 AM and your phone buzzes. Is

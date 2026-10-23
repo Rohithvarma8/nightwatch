@@ -5,7 +5,7 @@
 ("addon.json schema reference"). Field names and nesting follow that page's example, and the values meet its
 constraints: name ≤ 30 characters, short description ≤ 123, full description ≤ 4000, 3–4 example phrases,
 all 6 light icon sizes, at least one 600×900 carousel image, and HTTPS URLs for privacy and terms. The
-endpoint is the live MCP URL.
+endpoint is a placeholder (`https://<your-mcp-url>/mcp`): the original server was taken down after the hackathon.
 
 It's ready for `alexa-ai deploy` once Alexa+ onboarding is available to participants. The organizers
 confirmed that the developer tools are partner-preview only (Devpost topic 45262). Before deploying:
